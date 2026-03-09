@@ -3,10 +3,9 @@
  */
 
 export const priorityMap: Record<string, number> = {
-  Critical: 1,
-  High: 2,
-  Medium: 3,
-  Low: 4,
+  "High (Within 1 hours)": 2,
+  "Medium (Within 4-8 hours)": 3,
+  "Low (Within 24hrs)": 4,
 } as const;
 
 export const CLICKUP_PRIORITY = {
@@ -17,10 +16,10 @@ export const CLICKUP_PRIORITY = {
 } as const;
 
 export function slackPriorityToClickUp(priority: string): number {
-  const normalized = priority?.trim() || "Medium";
+  const normalized = priority?.trim() || "";
   return priorityMap[normalized] ?? CLICKUP_PRIORITY.NORMAL;
 }
 
 export function isHighPriority(priority: string): boolean {
-  return priority?.trim() === "High" || priority?.trim() === "Critical";
+  return priority?.trim() === "High (Within 1 hours)";
 }

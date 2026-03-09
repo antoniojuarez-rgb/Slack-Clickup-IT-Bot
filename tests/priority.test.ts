@@ -11,24 +11,19 @@ import {
 } from "../lib/priority.js";
 
 describe("priority mapping", () => {
-  it("maps Critical to 1", () => {
-    expect(priorityMap.Critical).toBe(1);
-    expect(slackPriorityToClickUp("Critical")).toBe(CLICKUP_PRIORITY.URGENT);
+  it("maps 'High (Within 1 hours)' to 2", () => {
+    expect(priorityMap["High (Within 1 hours)"]).toBe(2);
+    expect(slackPriorityToClickUp("High (Within 1 hours)")).toBe(CLICKUP_PRIORITY.HIGH);
   });
 
-  it("maps High to 2", () => {
-    expect(priorityMap.High).toBe(2);
-    expect(slackPriorityToClickUp("High")).toBe(CLICKUP_PRIORITY.HIGH);
+  it("maps 'Medium (Within 4-8 hours)' to 3", () => {
+    expect(priorityMap["Medium (Within 4-8 hours)"]).toBe(3);
+    expect(slackPriorityToClickUp("Medium (Within 4-8 hours)")).toBe(CLICKUP_PRIORITY.NORMAL);
   });
 
-  it("maps Medium to 3", () => {
-    expect(priorityMap.Medium).toBe(3);
-    expect(slackPriorityToClickUp("Medium")).toBe(CLICKUP_PRIORITY.NORMAL);
-  });
-
-  it("maps Low to 4", () => {
-    expect(priorityMap.Low).toBe(4);
-    expect(slackPriorityToClickUp("Low")).toBe(CLICKUP_PRIORITY.LOW);
+  it("maps 'Low (Within 24hrs)' to 4", () => {
+    expect(priorityMap["Low (Within 24hrs)"]).toBe(4);
+    expect(slackPriorityToClickUp("Low (Within 24hrs)")).toBe(CLICKUP_PRIORITY.LOW);
   });
 
   it("defaults unknown to Normal (3)", () => {
@@ -37,18 +32,17 @@ describe("priority mapping", () => {
   });
 
   it("trims whitespace", () => {
-    expect(slackPriorityToClickUp("  High  ")).toBe(2);
+    expect(slackPriorityToClickUp("  High (Within 1 hours)  ")).toBe(2);
   });
 });
 
 describe("isHighPriority", () => {
-  it("returns true for High and Critical", () => {
-    expect(isHighPriority("High")).toBe(true);
-    expect(isHighPriority("Critical")).toBe(true);
+  it("returns true for 'High (Within 1 hours)'", () => {
+    expect(isHighPriority("High (Within 1 hours)")).toBe(true);
   });
 
   it("returns false for Medium and Low", () => {
-    expect(isHighPriority("Medium")).toBe(false);
-    expect(isHighPriority("Low")).toBe(false);
+    expect(isHighPriority("Medium (Within 4-8 hours)")).toBe(false);
+    expect(isHighPriority("Low (Within 24hrs)")).toBe(false);
   });
 });
