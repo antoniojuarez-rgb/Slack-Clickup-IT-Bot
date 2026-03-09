@@ -1,5 +1,7 @@
 {
   "version": 2,
+  "framework": null,
+  "outputDirectory": ".",
   "buildCommand": "npm run build",
   "functions": {
     "api/**/*.ts": {
