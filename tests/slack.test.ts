@@ -59,16 +59,9 @@ describe("buildTicketMessageBlocks", () => {
 });
 
 describe("maybeAddHighPriorityMention", () => {
-  it("prepends mention block for High priority", () => {
+  it("prepends mention block for High (Within 1 hours) priority", () => {
     const blocks = [{ type: "header", text: { type: "plain_text", text: "x" } }];
-    const out = maybeAddHighPriorityMention(blocks, "High");
-    expect(out.length).toBe(blocks.length + 1);
-    expect(out[0].type).toBe("section");
-  });
-
-  it("prepends mention block for Critical priority", () => {
-    const blocks = [{ type: "header", text: { type: "plain_text", text: "x" } }];
-    const out = maybeAddHighPriorityMention(blocks, "Critical");
+    const out = maybeAddHighPriorityMention(blocks, "High (Within 1 hours)");
     expect(out.length).toBe(blocks.length + 1);
     expect(out[0].type).toBe("section");
   });
