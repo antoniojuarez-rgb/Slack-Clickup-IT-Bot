@@ -34,14 +34,15 @@ A Vercel backend that connects Slack Workflow Forms with ClickUp tasks.
 /api
   create-ticket.ts       ← Slack webhook → ClickUp task → Slack message
   slack-interaction.ts   ← "Take Ticket" button handler
-  slack-events.ts        ← Thread replies → ClickUp comments (NEEDS IMPLEMENTATION)
+  slack-events.ts        ← Thread replies → ClickUp comments
   take-ticket.ts         ← Forwards to slack-interaction logic
 
 /lib
-  clickup.ts             ← ClickUp API client
+  clickup.ts             ← ClickUp API client (createTask, getTask, updateTask, postComment, getTaskUrl)
   slack.ts               ← Block Kit builder + Slack API calls
   priority.ts            ← Priority mapping Slack → ClickUp
   security.ts            ← Slack signature verification + rate limiting
+  threadStore.ts         ← In-memory thread_ts → task_id mapping
 
 /types
   clickup.ts             ← ClickUp request/response types
@@ -51,11 +52,16 @@ A Vercel backend that connects Slack Workflow Forms with ClickUp tasks.
   env.ts                 ← Env variable accessors (lazy getters, never expose secrets)
 
 /utils
-  logger.ts              ← Structured logging, redacts sensitive keys
+  logger.ts              ← Structured logging, redacts sensitive keys (events: ticket_created, ticket_claimed, comment_synced, api_error, validation_error, security_reject)
   validator.ts           ← Payload validation (flat + workflow_step.inputs)
+  request.ts             ← Shared getRawBody stream reader for all API handlers
 
 /tests
-  (NEEDS CREATION — see testing section below)
+  priority.test.ts
+  validator.test.ts
+  security.test.ts
+  clickup.test.ts
+  slack.test.ts
 
 vercel.json
 package.json
@@ -82,9 +88,9 @@ Set these in Vercel → Settings → Environment Variables. Never hardcode.
 
 ---
 
-## Known bugs to fix — do these first
+## Known bugs — fixed
 
-### 🔴 BUG 1 — bodyParser breaks Slack signature verification
+### ✅ BUG 1 — bodyParser breaks Slack signature verification
 
 **Files:** `api/create-ticket.ts`, `api/slack-interaction.ts`
 
@@ -111,7 +117,7 @@ Then make the handler `async` and `await getRawBody(req)`.
 
 ---
 
-### 🔴 BUG 2 — ClickUp assignees payload structure is wrong
+### ✅ BUG 2 — ClickUp assignees payload structure is wrong
 
 **Files:** `types/clickup.ts`, `lib/clickup.ts`
 
@@ -149,11 +155,11 @@ await updateTask(taskId, { assignees: { add: [clickUpUserId] } });
 
 ---
 
-## Missing feature — implement this
+## Implemented features
 
-### `api/slack-events.ts` — Thread → ClickUp comment sync
+### ✅ `api/slack-events.ts` — Thread → ClickUp comment sync
 
-This file does not exist yet. It must:
+Implemented. It:
 
 1. Receive Slack Events API POST to `/api/slack-events`
 2. Handle `url_verification` challenge (Slack sends this on first setup)
@@ -190,9 +196,9 @@ export function getTaskIdForThread(threadTs: string): string | undefined
 
 ---
 
-## Testing — create these files
+## Testing — done
 
-All tests go in `/tests/`. Use Vitest.
+All tests are in `/tests/`. Use Vitest.
 
 ### Tests to write:
 

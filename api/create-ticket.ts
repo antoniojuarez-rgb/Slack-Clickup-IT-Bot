@@ -14,17 +14,9 @@ import { verifySlackSignature, checkRateLimit, getSlackUserIdFromPayload } from 
 import { validateWorkflowPayload, getWorkflowFields } from "../utils/validator.js";
 import { log } from "../utils/logger.js";
 import { saveThreadMapping } from "../lib/threadStore.js";
+import { getRawBody } from "../utils/request.js";
 
 export const config = { api: { bodyParser: false } };
-
-function getRawBody(req: VercelRequest): Promise<string> {
-  return new Promise((resolve, reject) => {
-    let body = "";
-    req.on("data", (chunk: Buffer) => { body += chunk.toString(); });
-    req.on("end", () => resolve(body));
-    req.on("error", reject);
-  });
-}
 
 export default async function handler(
   req: VercelRequest,

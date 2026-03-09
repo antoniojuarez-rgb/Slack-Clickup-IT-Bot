@@ -31,6 +31,7 @@ function sanitize(obj: unknown): unknown {
 export type LogEvent =
   | "ticket_created"
   | "ticket_claimed"
+  | "comment_synced"
   | "api_error"
   | "validation_error"
   | "security_reject";

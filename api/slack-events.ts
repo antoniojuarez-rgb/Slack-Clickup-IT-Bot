@@ -7,41 +7,11 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { verifySlackSignature } from "../lib/security.js";
 import { getTaskIdForThread } from "../lib/threadStore.js";
+import { postComment } from "../lib/clickup.js";
 import { log } from "../utils/logger.js";
+import { getRawBody } from "../utils/request.js";
 
 export const config = { api: { bodyParser: false } };
-
-const CLICKUP_BASE = "https://api.clickup.com/api/v2";
-
-function getRawBody(req: VercelRequest): Promise<string> {
-  return new Promise((resolve, reject) => {
-    let body = "";
-    req.on("data", (chunk: Buffer) => { body += chunk.toString(); });
-    req.on("end", () => resolve(body));
-    req.on("error", reject);
-  });
-}
-
-function getClickUpHeaders(): Record<string, string> {
-  const key = process.env.CLICKUP_API_KEY;
-  if (!key) throw new Error("CLICKUP_API_KEY is not set");
-  return {
-    "Content-Type": "application/json",
-    Authorization: key,
-  };
-}
-
-async function postClickUpComment(taskId: string, commentText: string): Promise<void> {
-  const res = await fetch(`${CLICKUP_BASE}/task/${taskId}/comment`, {
-    method: "POST",
-    headers: getClickUpHeaders(),
-    body: JSON.stringify({ comment_text: commentText, notify_all: false }),
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`ClickUp comment failed: ${res.status} ${text}`);
-  }
-}
 
 interface SlackEvent {
   type: string;
@@ -124,8 +94,8 @@ export default async function handler(
   const commentText = `Slack User: @${userName}\n\nMessage:\n${text}`;
 
   try {
-    await postClickUpComment(taskId, commentText);
-    log("ticket_created", { reason: "thread_comment_synced", taskId });
+    await postComment(taskId, commentText);
+    log("comment_synced", { taskId, thread_ts: event.thread_ts });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     log("api_error", { reason: "clickup_comment_failed", details: message });
