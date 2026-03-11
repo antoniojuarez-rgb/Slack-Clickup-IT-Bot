@@ -57,3 +57,84 @@ Once the work is done, the engineer clicks **Close Ticket** (only visible after 
 | **Low** | Minor — low impact, address when capacity allows |
 
 When in doubt, use **Medium**. Reserve **Critical** and **High** for issues that are actively blocking work.
+
+---
+
+## Technical details
+
+### Stack
+
+- **Runtime:** Node.js 20, TypeScript (strict, ESM)
+- **Hosting:** Vercel Serverless Functions
+- **APIs:** Slack API (Block Kit, Events API, Interactivity), ClickUp API v2
+- **Testing:** Vitest
+
+### Project structure
+
+```
+/api
+  create-ticket.ts       ← Slack webhook → ClickUp task → Slack message
+  slack-interaction.ts   ← Take Ticket / Close Ticket button handler
+  slack-events.ts        ← Thread replies → ClickUp comments
+  take-ticket.ts         ← Alias for slack-interaction
+
+/lib
+  clickup.ts             ← ClickUp API client (createTask, updateTask, closeTask, postComment)
+  slack.ts               ← Block Kit builders + Slack API calls
+  priority.ts            ← Priority mapping Slack → ClickUp
+  security.ts            ← Slack signature verification + rate limiting
+  threadStore.ts         ← In-memory thread_ts → task_id mapping
+
+/types
+  clickup.ts, slack.ts
+
+/config
+  env.ts                 ← Env variable accessors
+
+/utils
+  logger.ts              ← Structured logging (redacts secrets)
+  validator.ts           ← Payload validation
+  request.ts             ← Shared getRawBody for Slack signature verification
+
+/tests
+  *.test.ts
+```
+
+### API endpoints
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | `/api/create-ticket` | Receive Slack workflow webhook, create ClickUp task, post to Slack |
+| POST | `/api/slack-interaction` | Handle Take Ticket and Close Ticket button clicks |
+| POST | `/api/slack-events` | Slack Events API: url_verification + thread replies → ClickUp comments |
+| POST | `/api/take-ticket` | Alias for `/api/slack-interaction` |
+
+### Environment variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `CLICKUP_API_KEY` | ✅ | ClickUp personal API token |
+| `CLICKUP_LIST_ID` | ✅ | ClickUp list ID where tasks are created |
+| `SLACK_BOT_TOKEN` | ✅ | Slack Bot OAuth token (`xoxb-...`) |
+| `SLACK_SIGNING_SECRET` | ✅ | From Slack App → Basic Information |
+| `SLACK_CHANNEL_ID` | ✅ | Channel ID where ticket messages are posted |
+| `ITOPS_TEAM_TAG` | ❌ | Default: `@itopsteam` |
+| `SLACK_TO_CLICKUP_USER_MAP` | ❌ | JSON: `{"SLACK_USER_ID": CLICKUP_USER_ID}` |
+| `UPSTASH_REDIS_URL` | ❌ | For persistent thread → task mapping |
+| `UPSTASH_REDIS_TOKEN` | ❌ | For persistent thread → task mapping |
+
+### Security
+
+- Slack requests verified via `X-Slack-Signature` (HMAC SHA256) and timestamp (replay window: 5 min)
+- Rate limiting: 10 requests/min per Slack user ID
+- All secrets via environment variables only — never logged or hardcoded
+- Logged events: `ticket_created`, `ticket_claimed`, `ticket_closed`, `comment_synced`, `api_error`, `validation_error`, `security_reject`
+
+### Development
+
+```bash
+npm install
+npm run build
+npm test
+npm run dev   # Vercel dev server
+```
