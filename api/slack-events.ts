@@ -5,7 +5,7 @@
  */
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { verifySlackSignature } from "../lib/security.js";
+import { verifySlackSignature, checkRateLimit } from "../lib/security.js";
 import { getTaskIdForThread } from "../lib/threadStore.js";
 import { postComment } from "../lib/clickup.js";
 import { log } from "../utils/logger.js";
@@ -79,6 +79,12 @@ export default async function handler(
     event.subtype // ignore edited/deleted/bot messages
   ) {
     res.status(200).end();
+    return;
+  }
+
+  if (event.user && !checkRateLimit(event.user)) {
+    log("security_reject", { reason: "rate_limited" });
+    res.status(429).json({ error: "Too many requests" });
     return;
   }
 

@@ -4,7 +4,7 @@
  */
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { verifySlackSignature } from "../lib/security.js";
+import { verifySlackSignature, checkRateLimit } from "../lib/security.js";
 import { updateTask, closeTask } from "../lib/clickup.js";
 import {
   buildTicketMessageBlocks,
@@ -75,6 +75,13 @@ export default async function handler(
 
   if (payload.type !== "block_actions" || !payload.actions?.length) {
     res.status(200).end();
+    return;
+  }
+
+  const userId = payload.user?.id;
+  if (userId && !checkRateLimit(userId)) {
+    log("security_reject", { reason: "rate_limited" });
+    res.status(429).json({ error: "Too many requests" });
     return;
   }
 
