@@ -24,6 +24,8 @@ export function buildTicketMessageBlocks(params: {
   ticketUrl: string;
   isClaimed?: boolean;
   claimedBy?: string;
+  isClosed?: boolean;
+  closedBy?: string;
 }): SlackMessageBlock[] {
   const {
     requester,
@@ -36,6 +38,8 @@ export function buildTicketMessageBlocks(params: {
     ticketUrl,
     isClaimed,
     claimedBy,
+    isClosed,
+    closedBy,
   } = params;
 
   const blocks: SlackMessageBlock[] = [
@@ -71,7 +75,12 @@ export function buildTicketMessageBlocks(params: {
     });
   }
 
-  if (isClaimed && claimedBy) {
+  if (isClosed && closedBy) {
+    blocks.push({
+      type: "context",
+      elements: [{ type: "mrkdwn", text: `✅ Closed by ${closedBy}` }],
+    });
+  } else if (isClaimed && claimedBy) {
     blocks.push({
       type: "context",
       elements: [{ type: "mrkdwn", text: `🙋 Claimed by ${claimedBy}` }],
@@ -87,7 +96,7 @@ export function buildTicketMessageBlocks(params: {
     },
   ];
 
-  if (!isClaimed) {
+  if (!isClaimed && !isClosed) {
     (actions as Record<string, unknown>[]).push({
       type: "button",
       text: { type: "plain_text", text: "Take Ticket", emoji: true },
@@ -100,6 +109,24 @@ export function buildTicketMessageBlocks(params: {
       text: { type: "plain_text", text: "Take Ticket", emoji: true },
       value: taskId,
       action_id: "take_ticket",
+      disabled: true,
+    });
+  }
+
+  if (isClaimed && !isClosed) {
+    (actions as Record<string, unknown>[]).push({
+      type: "button",
+      text: { type: "plain_text", text: "Close Ticket", emoji: true },
+      value: taskId,
+      action_id: "close_ticket",
+      style: "danger",
+    });
+  } else if (isClosed) {
+    (actions as Record<string, unknown>[]).push({
+      type: "button",
+      text: { type: "plain_text", text: "Close Ticket", emoji: true },
+      value: taskId,
+      action_id: "close_ticket",
       disabled: true,
     });
   }
@@ -140,6 +167,45 @@ export function markBlocksAsClaimed(
     const contextBlock: SlackMessageBlock = {
       type: "context",
       elements: [{ type: "mrkdwn", text: `🙋 Claimed by ${claimedBy}` }],
+    };
+    const lastActions = blocks.findIndex((b) => b.type === "actions");
+    if (lastActions >= 0) blocks.splice(lastActions, 0, contextBlock);
+    else blocks.push(contextBlock);
+  }
+  return blocks;
+}
+
+/**
+ * Clone existing message blocks, disable both Take Ticket and Close Ticket buttons,
+ * and replace/add a "Closed by" context block.
+ */
+export function markBlocksAsClosed(
+  existingBlocks: unknown[],
+  closedBy: string
+): SlackMessageBlock[] {
+  const blocks = JSON.parse(JSON.stringify(existingBlocks)) as SlackMessageBlock[];
+  let closedContextInserted = false;
+  for (let i = 0; i < blocks.length; i++) {
+    const b = blocks[i];
+    if (b.type === "actions" && Array.isArray(b.elements)) {
+      for (const el of b.elements as Record<string, unknown>[]) {
+        if (el.action_id === "take_ticket" || el.action_id === "close_ticket") {
+          el.disabled = true;
+          delete el.style;
+        }
+      }
+    }
+    if (b.type === "context" && !closedContextInserted) {
+      (b as { elements?: unknown[] }).elements = [
+        { type: "mrkdwn", text: `✅ Closed by ${closedBy}` },
+      ];
+      closedContextInserted = true;
+    }
+  }
+  if (!closedContextInserted) {
+    const contextBlock: SlackMessageBlock = {
+      type: "context",
+      elements: [{ type: "mrkdwn", text: `✅ Closed by ${closedBy}` }],
     };
     const lastActions = blocks.findIndex((b) => b.type === "actions");
     if (lastActions >= 0) blocks.splice(lastActions, 0, contextBlock);

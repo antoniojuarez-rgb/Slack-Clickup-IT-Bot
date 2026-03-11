@@ -5,10 +5,11 @@
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { verifySlackSignature } from "../lib/security.js";
-import { updateTask } from "../lib/clickup.js";
+import { updateTask, closeTask } from "../lib/clickup.js";
 import {
   buildTicketMessageBlocks,
   markBlocksAsClaimed,
+  markBlocksAsClosed,
   updateMessage,
   getSlackUserInfo,
 } from "../lib/slack.js";
@@ -77,13 +78,16 @@ export default async function handler(
     return;
   }
 
-  const takeTicketAction = payload.actions.find((a) => a.action_id === "take_ticket");
-  if (!takeTicketAction?.value) {
+  const action = payload.actions.find(
+    (a) => a.action_id === "take_ticket" || a.action_id === "close_ticket"
+  );
+  if (!action?.value) {
     res.status(200).end();
     return;
   }
 
-  const taskId = takeTicketAction.value;
+  const taskId = action.value;
+  const actionId = action.action_id;
   const slackUserId = payload.user?.id;
   const channelId = payload.channel?.id;
   const messageTs = payload.message?.ts;
@@ -94,51 +98,87 @@ export default async function handler(
     return;
   }
 
-  const userMap = env.SLACK_TO_CLICKUP_USER_MAP();
-  const clickUpUserId = userMap[slackUserId];
-
-  if (clickUpUserId !== undefined) {
-    try {
-      await updateTask(taskId, { assignees: { add: [clickUpUserId] } });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Unknown error";
-      log("api_error", { reason: "clickup_assign_failed", details: message });
-    }
-  }
-
-  let claimedBy = `<@${slackUserId}>`;
+  let displayName = `<@${slackUserId}>`;
   try {
     const userInfo = await getSlackUserInfo(slackUserId);
-    if (userInfo?.real_name) claimedBy = userInfo.real_name;
-    else if (userInfo?.name) claimedBy = `@${userInfo.name}`;
+    if (userInfo?.real_name) displayName = userInfo.real_name;
+    else if (userInfo?.name) displayName = `@${userInfo.name}`;
   } catch {
-    // keep claimedBy as <@id>
+    // keep displayName as <@id>
   }
 
-  log("ticket_claimed", { taskId, slackUserId });
-
   const existingBlocks = payload.message?.blocks ?? [];
-  const blocks =
-    existingBlocks.length > 0
-      ? markBlocksAsClaimed(existingBlocks, claimedBy)
-      : buildTicketMessageBlocks({
-          requester: "",
-          priority: "",
-          typeOfRequest: "",
-          description: "",
-          troubleshootingSteps: "",
-          ticketId: `ITOPS-${taskId.slice(-6)}`,
-          taskId,
-          ticketUrl: `https://app.clickup.com/t/${taskId}`,
-          isClaimed: true,
-          claimedBy,
-        });
 
-  try {
-    await updateMessage(channelId, messageTs, blocks);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    log("api_error", { reason: "slack_update_failed", details: message });
+  if (actionId === "take_ticket") {
+    const userMap = env.SLACK_TO_CLICKUP_USER_MAP();
+    const clickUpUserId = userMap[slackUserId];
+
+    if (clickUpUserId !== undefined) {
+      try {
+        await updateTask(taskId, { assignees: { add: [clickUpUserId] } });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Unknown error";
+        log("api_error", { reason: "clickup_assign_failed", details: message });
+      }
+    }
+
+    log("ticket_claimed", { taskId, slackUserId });
+
+    const blocks =
+      existingBlocks.length > 0
+        ? markBlocksAsClaimed(existingBlocks, displayName)
+        : buildTicketMessageBlocks({
+            requester: "",
+            priority: "",
+            typeOfRequest: "",
+            description: "",
+            troubleshootingSteps: "",
+            ticketId: `ITOPS-${taskId.slice(-6)}`,
+            taskId,
+            ticketUrl: `https://app.clickup.com/t/${taskId}`,
+            isClaimed: true,
+            claimedBy: displayName,
+          });
+
+    try {
+      await updateMessage(channelId, messageTs, blocks);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      log("api_error", { reason: "slack_update_failed", details: message });
+    }
+  } else if (actionId === "close_ticket") {
+    try {
+      await closeTask(taskId);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      log("api_error", { reason: "clickup_close_failed", details: message });
+    }
+
+    log("ticket_closed", { taskId, slackUserId });
+
+    const blocks =
+      existingBlocks.length > 0
+        ? markBlocksAsClosed(existingBlocks, displayName)
+        : buildTicketMessageBlocks({
+            requester: "",
+            priority: "",
+            typeOfRequest: "",
+            description: "",
+            troubleshootingSteps: "",
+            ticketId: `ITOPS-${taskId.slice(-6)}`,
+            taskId,
+            ticketUrl: `https://app.clickup.com/t/${taskId}`,
+            isClaimed: true,
+            isClosed: true,
+            closedBy: displayName,
+          });
+
+    try {
+      await updateMessage(channelId, messageTs, blocks);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      log("api_error", { reason: "slack_update_failed", details: message });
+    }
   }
 
   res.status(200).end();

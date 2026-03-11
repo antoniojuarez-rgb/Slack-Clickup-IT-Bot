@@ -84,6 +84,21 @@ export async function postComment(taskId: string, commentText: string): Promise<
   }
 }
 
+export async function closeTask(taskId: string): Promise<ClickUpTaskResponse> {
+  const res = await fetch(`${CLICKUP_BASE}/task/${taskId}`, {
+    method: "PUT",
+    headers: getHeaders(),
+    body: JSON.stringify({ status: "complete" }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`ClickUp close task failed: ${res.status} ${text}`);
+  }
+
+  return (await res.json()) as ClickUpTaskResponse;
+}
+
 export function getTaskUrl(taskId: string): string {
   return `https://app.clickup.com/t/${taskId}`;
 }
