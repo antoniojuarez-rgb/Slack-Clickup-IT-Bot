@@ -299,6 +299,32 @@ export async function getSlackUserInfo(userId: string): Promise<{
   return data.user;
 }
 
+/**
+ * Post an ephemeral message (visible only to the given user).
+ */
+export async function postEphemeral(
+  channelId: string,
+  userId: string,
+  text: string
+): Promise<void> {
+  const res = await fetch(`${SLACK_API_BASE}/chat.postEphemeral`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getBotToken()}`,
+    },
+    body: JSON.stringify({
+      channel: channelId,
+      user: userId,
+      text,
+    }),
+  });
+  const data = (await res.json()) as { ok: boolean; error?: string };
+  if (!res.ok || !data.ok) {
+    throw new Error(data.error ?? `Slack API error: ${res.status}`);
+  }
+}
+
 /** Slack thread message from conversations.replies */
 export interface SlackThreadMessage {
   user?: string;

@@ -20,6 +20,10 @@ function getRedis(): Redis {
 
 const PREFIX_THREAD = "thread:";
 const PREFIX_REOPEN = "reopen:";
+const PREFIX_REPORTER = "reporter:";
+const PREFIX_ASSIGNEE = "assignee:";
+const PREFIX_CLOSED_TS = "closed_ts:";
+const PREFIX_REOPEN_COUNT = "reopen_count:";
 
 /**
  * Save thread ts → task id (when ticket is created).
@@ -77,4 +81,94 @@ export async function clearReopenTimestamp(taskId: string): Promise<void> {
   const redis = getRedis();
   const key = `${PREFIX_REOPEN}${taskId}`;
   await redis.del(key);
+}
+
+/**
+ * Save reporter Slack user ID (when ticket is created).
+ */
+export async function saveReporter(
+  taskId: string,
+  slackUserId: string
+): Promise<void> {
+  const redis = getRedis();
+  await redis.set(`${PREFIX_REPORTER}${taskId}`, slackUserId, {
+    ex: TTL_SECONDS,
+  });
+}
+
+/**
+ * Get reporter Slack user ID.
+ */
+export async function getReporter(taskId: string): Promise<string | null> {
+  const redis = getRedis();
+  const value = await redis.get<string>(`${PREFIX_REPORTER}${taskId}`);
+  return value ?? null;
+}
+
+/**
+ * Save assignee Slack user ID (when ticket is claimed).
+ */
+export async function saveAssignee(
+  taskId: string,
+  slackUserId: string
+): Promise<void> {
+  const redis = getRedis();
+  await redis.set(`${PREFIX_ASSIGNEE}${taskId}`, slackUserId, {
+    ex: TTL_SECONDS,
+  });
+}
+
+/**
+ * Get assignee Slack user ID.
+ */
+export async function getAssignee(taskId: string): Promise<string | null> {
+  const redis = getRedis();
+  const value = await redis.get<string>(`${PREFIX_ASSIGNEE}${taskId}`);
+  return value ?? null;
+}
+
+/**
+ * Save closed timestamp (when ticket is closed). Use Unix seconds for 24h check.
+ */
+export async function saveClosedTs(
+  taskId: string,
+  ts: string
+): Promise<void> {
+  const redis = getRedis();
+  await redis.set(`${PREFIX_CLOSED_TS}${taskId}`, ts, {
+    ex: TTL_SECONDS,
+  });
+}
+
+/**
+ * Get closed timestamp (for 24h reopen guard).
+ */
+export async function getClosedTs(taskId: string): Promise<string | null> {
+  const redis = getRedis();
+  const value = await redis.get<string>(`${PREFIX_CLOSED_TS}${taskId}`);
+  return value ?? null;
+}
+
+/**
+ * Get reopen count for this task.
+ */
+export async function getReopenCount(taskId: string): Promise<number> {
+  const redis = getRedis();
+  const key = `${PREFIX_REOPEN_COUNT}${taskId}`;
+  const value = await redis.get<string>(key);
+  if (value == null) return 0;
+  const n = parseInt(value, 10);
+  return Number.isNaN(n) ? 0 : n;
+}
+
+/**
+ * Increment reopen count (TTL 30 days on key).
+ */
+export async function incrementReopenCount(taskId: string): Promise<void> {
+  const redis = getRedis();
+  const key = `${PREFIX_REOPEN_COUNT}${taskId}`;
+  const newCount = await redis.incr(key);
+  if (newCount === 1) {
+    await redis.expire(key, TTL_SECONDS);
+  }
 }

@@ -4,6 +4,7 @@
  */
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { SlackMessageBlock } from "../types/slack.js";
 import { verifySlackSignature, checkRateLimit } from "../lib/security.js";
 import { updateTask, closeTask, reopenTask, postComment } from "../lib/clickup.js";
 import {
@@ -13,12 +14,20 @@ import {
   getSlackUserInfo,
   getThreadReplies,
   postMessageInThread,
+  postEphemeral,
 } from "../lib/slack.js";
 import { env } from "../config/env.js";
 import {
   saveReopenTimestamp,
   getReopenTimestamp,
   clearReopenTimestamp,
+  saveAssignee,
+  saveClosedTs,
+  getClosedTs,
+  getReopenCount,
+  incrementReopenCount,
+  getReporter,
+  getAssignee,
 } from "../lib/threadStore.js";
 import { log } from "../utils/logger.js";
 import { getRawBody } from "../utils/request.js";
@@ -47,7 +56,7 @@ interface BlockActionPayload {
   type: string;
   user?: { id: string; username?: string; name?: string };
   channel?: { id: string };
-  message?: { ts: string; blocks?: unknown[] };
+  message?: { ts: string; thread_ts?: string; blocks?: unknown[] };
   actions?: Array<{ action_id: string; value?: string }>;
 }
 
@@ -218,6 +227,7 @@ export default async function handler(
         log("api_error", { reason: "clickup_assign_failed", details: message });
       }
     }
+    await saveAssignee(taskId, slackUserId);
 
     log("ticket_claimed", { taskId, slackUserId });
 
@@ -279,6 +289,7 @@ export default async function handler(
       const message = err instanceof Error ? err.message : "Unknown error";
       log("api_error", { reason: "clickup_close_failed", details: message });
     }
+    await saveClosedTs(taskId, String(Date.now() / 1000));
 
     log("ticket_closed", { taskId, slackUserId });
 
@@ -315,10 +326,97 @@ export default async function handler(
     }
   } else if (actionId === "reopen_ticket") {
     try {
-      await saveReopenTimestamp(taskId, messageTs);
+      const closedTs = await getClosedTs(taskId);
+      if (closedTs) {
+        const closedAt = parseFloat(closedTs) * 1000;
+        if (Date.now() - closedAt < 24 * 60 * 60 * 1000) {
+          await postEphemeral(
+            channelId,
+            slackUserId,
+            "⚠️ Este ticket fue cerrado hace menos de 24 horas. Por favor abre un ticket nuevo."
+          );
+          res.status(200).end();
+          return;
+        }
+      }
+
+      const reopenCount = await getReopenCount(taskId);
+      if (reopenCount >= 2) {
+        await postEphemeral(
+          channelId,
+          slackUserId,
+          "⚠️ Este ticket ya fue reabierto 2 veces. Por favor abre un ticket nuevo."
+        );
+        res.status(200).end();
+        return;
+      }
+
+      await incrementReopenCount(taskId);
       const reopenStatus = env.CLICKUP_REOPEN_STATUS();
       await reopenTask(taskId, reopenStatus);
-      await postComment(taskId, `🔄 Issue reabierto por ${displayName}`);
+      await saveReopenTimestamp(taskId, messageTs);
+
+      const reporterId = await getReporter(taskId);
+      const assigneeId = await getAssignee(taskId);
+      let reporterDisplay = reporterId ? `<@${reporterId}>` : "usuario";
+      if (reporterId) {
+        const info = await getSlackUserInfo(reporterId);
+        if (info?.real_name) reporterDisplay = info.real_name;
+        else if (info?.name) reporterDisplay = `@${info.name}`;
+      }
+      let assigneeDisplay = assigneeId ? `<@${assigneeId}>` : "el equipo";
+      if (assigneeId) {
+        const info = await getSlackUserInfo(assigneeId);
+        if (info?.real_name) assigneeDisplay = info.real_name;
+        else if (info?.name) assigneeDisplay = `@${info.name}`;
+      }
+
+      await postComment(
+        taskId,
+        `🔄 Issue reabierto por ${reporterDisplay}`
+      );
+
+      const threadReopenText =
+        (reporterId
+          ? `🔄 <@${reporterId}> ha reabierto el ticket. `
+          : "🔄 Ticket reabierto. ") +
+        (assigneeId
+          ? `<@${assigneeId}> da seguimiento por favor.`
+          : "Da seguimiento por favor.");
+      await postMessageInThread(channelId, messageTs, threadReopenText);
+
+      const closureBlocksOnlyContext: SlackMessageBlock[] = [
+        {
+          type: "context",
+          elements: [
+            {
+              type: "mrkdwn",
+              text: reporterId
+                ? `🔄 Ticket reabierto por <@${reporterId}>`
+                : "🔄 Ticket reabierto.",
+            },
+          ],
+        },
+      ];
+      await updateMessage(channelId, messageTs, closureBlocksOnlyContext);
+
+      const mainMessageTs =
+        (payload.message as { thread_ts?: string } | undefined)?.thread_ts ??
+        messageTs;
+      const mainBlocks = buildTicketMessageBlocks({
+        requester: extracted.requester,
+        priority: extracted.priority,
+        typeOfRequest: extracted.typeOfRequest,
+        description: extracted.description,
+        troubleshootingSteps: extracted.troubleshootingSteps,
+        ticketId,
+        taskId,
+        ticketUrl,
+        isClaimed: true,
+        claimedBy: assigneeDisplay,
+      });
+      await updateMessage(channelId, mainMessageTs, cleanBlocks(mainBlocks) as any[]);
+
       log("ticket_reopened", { taskId, slackUserId });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";

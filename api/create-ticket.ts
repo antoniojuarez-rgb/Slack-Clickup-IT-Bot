@@ -13,7 +13,7 @@ import { slackPriorityToClickUp } from "../lib/priority.js";
 import { verifySlackSignature, checkRateLimit, getSlackUserIdFromPayload } from "../lib/security.js";
 import { validateWorkflowPayload, getWorkflowFields } from "../utils/validator.js";
 import { log } from "../utils/logger.js";
-import { saveThreadMapping } from "../lib/threadStore.js";
+import { saveThreadMapping, saveReporter } from "../lib/threadStore.js";
 import { getRawBody } from "../utils/request.js";
 
 export const config = { api: { bodyParser: false } };
@@ -114,6 +114,9 @@ export default async function handler(
     const msgResult = await postMessage(channelId, blocks);
     if (msgResult.ts) {
       await saveThreadMapping(msgResult.ts, taskId);
+    }
+    if (slackUserId) {
+      await saveReporter(taskId, slackUserId);
     }
 
     log("ticket_created", {
