@@ -12,8 +12,8 @@ import type {
 const CLICKUP_BASE = "https://api.clickup.com/api/v2";
 
 function getHeaders(): Record<string, string> {
-  const key = "pk_95360749_KSK831WALVUO3ME8V79419M2YKJ9BQ7R"; // temp: hardcoded for debugging
-  console.log("[debug] CLICKUP_API_KEY:", key?.slice(0, 10), "| length:", key?.length);
+  const key = process.env.CLICKUP_API_KEY;
+  if (!key) throw new Error("CLICKUP_API_KEY is not set");
   return {
     "Content-Type": "application/json",
     Authorization: key,
