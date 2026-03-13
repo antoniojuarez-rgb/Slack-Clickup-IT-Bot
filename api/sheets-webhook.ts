@@ -125,7 +125,7 @@ export default async function handler(
     if (msgResult.ts) {
       await saveThreadMapping(msgResult.ts, taskId);
       const threadTsSlug = msgResult.ts.replace(".", "");
-      const slackThreadUrl = `https://felixpago.slack.com/archives/${channelId}/p${threadTsSlug}`;
+      const slackThreadUrl = `https://felix-pago.slack.com/archives/${channelId}/p${threadTsSlug}`;
       log("debug", { event: "slack_thread_url", url: slackThreadUrl, taskId });
       try {
         await setCustomField(
