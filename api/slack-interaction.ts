@@ -17,6 +17,24 @@ import { getRawBody } from "../utils/request.js";
 
 export const config = { api: { bodyParser: false } };
 
+function cleanBlocks(blocks: unknown[]): unknown[] {
+  const disallowed = ['verbatim', 'app_id', 'bot_id', 'container'];
+  function clean(obj: unknown): unknown {
+    if (Array.isArray(obj)) return obj.map(clean);
+    if (obj && typeof obj === 'object') {
+      const cleaned: Record<string, unknown> = {};
+      for (const key in obj as Record<string, unknown>) {
+        if (!disallowed.includes(key)) {
+          cleaned[key] = clean((obj as Record<string, unknown>)[key]);
+        }
+      }
+      return cleaned;
+    }
+    return obj;
+  }
+  return clean(blocks) as unknown[];
+}
+
 interface BlockActionPayload {
   type: string;
   user?: { id: string; username?: string; name?: string };
@@ -186,9 +204,9 @@ export default async function handler(
       claimedBy: displayName,
     });
 
-    log("slack_update_blocks", { action: "take_ticket", blocks: JSON.stringify(blocks) });
+      log("slack_update_blocks", { action: "take_ticket", blocks: JSON.stringify(blocks) });
     try {
-      await updateMessage(channelId, messageTs, blocks);
+      await updateMessage(channelId, messageTs, cleanBlocks(blocks));
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
       log("api_error", { reason: "slack_update_failed", details: message });
@@ -219,7 +237,7 @@ export default async function handler(
 
     log("slack_update_blocks", { action: "close_ticket", blocks: JSON.stringify(blocks) });
     try {
-      await updateMessage(channelId, messageTs, blocks);
+      await updateMessage(channelId, messageTs, cleanBlocks(blocks));
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
       log("api_error", { reason: "slack_update_failed", details: message });
