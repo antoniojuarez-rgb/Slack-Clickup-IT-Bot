@@ -99,6 +99,27 @@ export async function closeTask(taskId: string): Promise<ClickUpTaskResponse> {
   return (await res.json()) as ClickUpTaskResponse;
 }
 
+/**
+ * Reopen a task by setting its status back to open/pending (env CLICKUP_REOPEN_STATUS, default "open").
+ */
+export async function reopenTask(
+  taskId: string,
+  status: string
+): Promise<ClickUpTaskResponse> {
+  const res = await fetch(`${CLICKUP_BASE}/task/${taskId}`, {
+    method: "PUT",
+    headers: getHeaders(),
+    body: JSON.stringify({ status }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`ClickUp reopen task failed: ${res.status} ${text}`);
+  }
+
+  return (await res.json()) as ClickUpTaskResponse;
+}
+
 export function getTaskUrl(taskId: string): string {
   return `https://app.clickup.com/t/${taskId}`;
 }

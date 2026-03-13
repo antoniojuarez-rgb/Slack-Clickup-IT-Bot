@@ -5,11 +5,14 @@
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { verifySlackSignature, checkRateLimit } from "../lib/security.js";
-import { updateTask, closeTask } from "../lib/clickup.js";
+import { updateTask, closeTask, reopenTask, postComment } from "../lib/clickup.js";
 import {
   buildTicketMessageBlocks,
+  buildClosureThreadBlocks,
   updateMessage,
   getSlackUserInfo,
+  getThreadReplies,
+  postMessageInThread,
 } from "../lib/slack.js";
 import { env } from "../config/env.js";
 import { log } from "../utils/logger.js";
@@ -41,6 +44,25 @@ interface BlockActionPayload {
   channel?: { id: string };
   message?: { ts: string; blocks?: unknown[] };
   actions?: Array<{ action_id: string; value?: string }>;
+}
+
+/** Format Slack ts (e.g. "1234567890.123456") to "3:15 PM" */
+function formatSlackTime(ts: string): string {
+  const date = new Date(parseFloat(ts) * 1000);
+  return date.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
+
+/** Strip markdown to plain text (no bold, no asterisks) */
+function toPlainText(s: string): string {
+  return s
+    .replace(/\*+|\_+/g, "")
+    .replace(/^>\s?/gm, "")
+    .replace(/`/g, "")
+    .trim();
 }
 
 export default async function handler(
@@ -102,7 +124,10 @@ export default async function handler(
   }
 
   const action = payload.actions.find(
-    (a) => a.action_id === "take_ticket" || a.action_id === "close_ticket"
+    (a) =>
+      a.action_id === "take_ticket" ||
+      a.action_id === "close_ticket" ||
+      a.action_id === "reopen_ticket"
   );
   if (!action?.value) {
     res.status(200).end();
@@ -212,6 +237,32 @@ export default async function handler(
       log("api_error", { reason: "slack_update_failed", details: message });
     }
   } else if (actionId === "close_ticket") {
+    // Feature 1: Copy Slack thread to ClickUp as a single comment before closing
+    try {
+      const replies = await getThreadReplies(channelId, messageTs);
+      const skipFirst = replies.slice(1);
+      const lines: string[] = [];
+      for (const msg of skipFirst) {
+        const userId = msg.user ?? "";
+        let name = "Unknown";
+        if (userId) {
+          const info = await getSlackUserInfo(userId);
+          if (info?.real_name) name = info.real_name;
+          else if (info?.name) name = info.name;
+        }
+        const timeStr = msg.ts ? formatSlackTime(msg.ts) : "";
+        const text = toPlainText(msg.text ?? "");
+        lines.push(`${name} - ${timeStr}:\n  ${text}`);
+      }
+      const threadBody = lines.join("\n\n");
+      const commentText =
+        "--- Slack Thread History ---\n\n" + (threadBody || "(no replies in thread)");
+      await postComment(taskId, commentText);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      log("api_error", { reason: "thread_to_clickup_failed", details: message });
+    }
+
     try {
       await closeTask(taskId);
     } catch (err) {
@@ -241,6 +292,25 @@ export default async function handler(
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
       log("api_error", { reason: "slack_update_failed", details: message });
+    }
+
+    // Feature 2: Post closure message in thread with Reabrir Ticket button
+    const closureText = `Tu issue ha sido cerrado por ${displayName}. Si todavía necesitas ayuda, usa el botón de abajo:`;
+    const closureBlocks = buildClosureThreadBlocks(taskId, displayName);
+    try {
+      await postMessageInThread(channelId, messageTs, closureText, closureBlocks);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      log("api_error", { reason: "closure_thread_message_failed", details: message });
+    }
+  } else if (actionId === "reopen_ticket") {
+    try {
+      const reopenStatus = env.CLICKUP_REOPEN_STATUS();
+      await reopenTask(taskId, reopenStatus);
+      log("ticket_reopened", { taskId, slackUserId });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      log("api_error", { reason: "clickup_reopen_failed", details: message });
     }
   }
 

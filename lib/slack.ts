@@ -298,3 +298,91 @@ export async function getSlackUserInfo(userId: string): Promise<{
   if (!data.ok || !data.user) return null;
   return data.user;
 }
+
+/** Slack thread message from conversations.replies */
+export interface SlackThreadMessage {
+  user?: string;
+  text?: string;
+  ts?: string;
+  [key: string]: unknown;
+}
+
+/**
+ * Fetch all messages in a thread (conversations.replies).
+ * First message is the parent; use thread_ts as the parent message ts.
+ */
+export async function getThreadReplies(
+  channelId: string,
+  threadTs: string
+): Promise<SlackThreadMessage[]> {
+  const params = new URLSearchParams({
+    channel: channelId,
+    ts: threadTs,
+  });
+  const res = await fetch(`${SLACK_API_BASE}/conversations.replies?${params}`, {
+    headers: { Authorization: `Bearer ${getBotToken()}` },
+  });
+  const data = (await res.json()) as {
+    ok: boolean;
+    messages?: SlackThreadMessage[];
+    error?: string;
+  };
+  if (!data.ok || !Array.isArray(data.messages)) {
+    throw new Error(data.error ?? "conversations.replies failed");
+  }
+  return data.messages;
+}
+
+/**
+ * Blocks for the "closure" message in the thread: text + Reabrir Ticket button.
+ */
+export function buildClosureThreadBlocks(
+  taskId: string,
+  closedByDisplay: string
+): SlackMessageBlock[] {
+  const text = `Tu issue ha sido cerrado por ${closedByDisplay}. Si todavía necesitas ayuda, usa el botón de abajo:`;
+  return [
+    { type: "section", text: { type: "mrkdwn", text } },
+    {
+      type: "actions",
+      elements: [
+        {
+          type: "button",
+          text: { type: "plain_text", text: "Reabrir Ticket", emoji: true },
+          value: taskId,
+          action_id: "reopen_ticket",
+        },
+      ],
+    },
+  ];
+}
+
+/**
+ * Post a message into a thread (chat.postMessage with thread_ts).
+ */
+export async function postMessageInThread(
+  channelId: string,
+  threadTs: string,
+  text: string,
+  blocks?: SlackMessageBlock[]
+): Promise<{ ok: boolean; ts?: string; error?: string }> {
+  const body: Record<string, unknown> = {
+    channel: channelId,
+    thread_ts: threadTs,
+    text,
+  };
+  if (blocks?.length) body.blocks = blocks;
+  const res = await fetch(`${SLACK_API_BASE}/chat.postMessage`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${getBotToken()}`,
+    },
+    body: JSON.stringify(body),
+  });
+  const data = (await res.json()) as { ok: boolean; ts?: string; error?: string };
+  if (!res.ok || !data.ok) {
+    throw new Error(data.error ?? `Slack API error: ${res.status}`);
+  }
+  return data;
+}

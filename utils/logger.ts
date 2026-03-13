@@ -32,6 +32,7 @@ export type LogEvent =
   | "ticket_created"
   | "ticket_claimed"
   | "ticket_closed"
+  | "ticket_reopened"
   | "comment_synced"
   | "api_error"
   | "validation_error"

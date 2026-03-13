@@ -35,4 +35,6 @@ export const env = {
   SLACK_CHANNEL_ID: () => getEnv("SLACK_CHANNEL_ID"),
   ITOPS_TEAM_TAG: () => getEnvOptional("ITOPS_TEAM_TAG", "@itopsteam"),
   SLACK_TO_CLICKUP_USER_MAP: getSlackToClickUpUserMap,
+  /** ClickUp status name when reopening a task (e.g. "open", "to do"). Default: "open" */
+  CLICKUP_REOPEN_STATUS: () => getEnvOptional("CLICKUP_REOPEN_STATUS", "open"),
 } as const;
