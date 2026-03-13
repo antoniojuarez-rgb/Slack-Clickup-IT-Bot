@@ -237,6 +237,11 @@ export default async function handler(
 
   if (actionId === "take_ticket") {
     const userMap = env.SLACK_TO_CLICKUP_USER_MAP();
+    if (userMap[slackUserId] === undefined) {
+      await postEphemeral(channelId, slackUserId, "You are not authorized to take tickets. Please contact your IT administrator.");
+      res.status(200).end();
+      return;
+    }
     const clickUpUserId = userMap[slackUserId];
 
     if (clickUpUserId !== undefined) {
@@ -336,7 +341,7 @@ export default async function handler(
     }
 
     // Feature 2: Post closure message in thread with Reabrir Ticket button
-    const closureText = `Tu issue ha sido cerrado por ${displayName}. Si todavía necesitas ayuda, usa el botón de abajo:`;
+    const closureText = `Your issue has been closed by ${displayName}. If you still need help, use the button below:`;
     const closureBlocks = buildClosureThreadBlocks(taskId, displayName);
     try {
       await postMessageInThread(channelId, messageTs, closureText, closureBlocks);
@@ -368,7 +373,7 @@ export default async function handler(
           await postEphemeral(
             channelId,
             slackUserId,
-            "⚠️ Han pasado más de 24 horas desde que se cerró el ticket. Por favor abre un ticket nuevo."
+            "⚠️ More than 24 hours have passed since this ticket was closed. Please open a new ticket."
           );
           res.status(200).end();
           return;
@@ -380,7 +385,7 @@ export default async function handler(
         await postEphemeral(
           channelId,
           slackUserId,
-          "⚠️ Este ticket ya fue reabierto 2 veces. Por favor abre un ticket nuevo."
+          "⚠️ This ticket has already been reopened 2 times. Please open a new ticket."
         );
         res.status(200).end();
         return;
@@ -393,13 +398,13 @@ export default async function handler(
 
       const reporterId = await getReporter(taskId);
       const assigneeId = await getAssignee(taskId);
-      let reporterDisplay = reporterId ? `<@${reporterId}>` : "usuario";
+      let reporterDisplay = reporterId ? `<@${reporterId}>` : "user";
       if (reporterId) {
         const info = await getSlackUserInfo(reporterId);
         if (info?.real_name) reporterDisplay = info.real_name;
         else if (info?.name) reporterDisplay = `@${info.name}`;
       }
-      let assigneeDisplay = assigneeId ? `<@${assigneeId}>` : "el equipo";
+      let assigneeDisplay = assigneeId ? `<@${assigneeId}>` : "the team";
       if (assigneeId) {
         const info = await getSlackUserInfo(assigneeId);
         if (info?.real_name) assigneeDisplay = info.real_name;
@@ -413,11 +418,11 @@ export default async function handler(
 
       const threadReopenText =
         (reporterId
-          ? `🔄 <@${reporterId}> ha reabierto el ticket. `
-          : "🔄 Ticket reabierto. ") +
+          ? `🔄 <@${reporterId}> has reopened the ticket. `
+          : "🔄 Ticket reopened. ") +
         (assigneeId
-          ? `<@${assigneeId}> da seguimiento por favor.`
-          : "Da seguimiento por favor.");
+          ? `<@${assigneeId}> please follow up.`
+          : "Please follow up.");
       await postMessageInThread(channelId, mainMessageTs, threadReopenText);
 
       const closureBlocksOnlyContext: SlackMessageBlock[] = [
@@ -427,8 +432,8 @@ export default async function handler(
             {
               type: "mrkdwn",
               text: reporterId
-                ? `🔄 Ticket reabierto por <@${reporterId}>`
-                : "🔄 Ticket reabierto.",
+                ? `🔄 Ticket reopened by <@${reporterId}>`
+                : "🔄 Ticket reopened.",
             },
           ],
         },

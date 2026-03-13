@@ -407,7 +407,7 @@ export function buildClosureThreadBlocks(
   taskId: string,
   closedByDisplay: string
 ): SlackMessageBlock[] {
-  const text = `Tu issue ha sido cerrado por ${closedByDisplay}. Si todavía necesitas ayuda, usa el botón de abajo:`;
+  const text = `Your issue has been closed by ${closedByDisplay}. If you still need help, use the button below:`;
   return [
     { type: "section", text: { type: "mrkdwn", text } },
     {
@@ -415,7 +415,7 @@ export function buildClosureThreadBlocks(
       elements: [
         {
           type: "button",
-          text: { type: "plain_text", text: "Reabrir Ticket", emoji: true },
+          text: { type: "plain_text", text: "Reopen Ticket", emoji: true },
           value: taskId,
           action_id: "reopen_ticket",
         },

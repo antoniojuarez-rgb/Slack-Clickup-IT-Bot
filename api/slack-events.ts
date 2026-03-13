@@ -7,7 +7,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { verifySlackSignature, checkRateLimit } from "../lib/security.js";
 import { getTaskIdFromThread } from "../lib/threadStore.js";
-import { postComment } from "../lib/clickup.js";
 import { log } from "../utils/logger.js";
 import { getRawBody } from "../utils/request.js";
 
@@ -95,17 +94,18 @@ export default async function handler(
     return;
   }
 
-  const userName = event.username ?? event.user ?? "Unknown";
-  const text = event.text ?? "";
-  const commentText = `Slack User: @${userName}\n\nMessage:\n${text}`;
-
-  try {
-    await postComment(taskId, commentText);
-    log("comment_synced", { taskId, thread_ts: event.thread_ts });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    log("api_error", { reason: "clickup_comment_failed", details: message });
-  }
+  // Automatic per-message sync to ClickUp disabled. Thread content is only sent to ClickUp
+  // when the ticket is closed via the Close Ticket button (full thread history as one comment).
+  // const userName = event.username ?? event.user ?? "Unknown";
+  // const text = event.text ?? "";
+  // const commentText = `Slack User: @${userName}\n\nMessage:\n${text}`;
+  // try {
+  //   await postComment(taskId, commentText);
+  //   log("comment_synced", { taskId, thread_ts: event.thread_ts });
+  // } catch (err) {
+  //   const message = err instanceof Error ? err.message : "Unknown error";
+  //   log("api_error", { reason: "clickup_comment_failed", details: message });
+  // }
 
   res.status(200).end();
 }
