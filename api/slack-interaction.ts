@@ -182,8 +182,15 @@ export default async function handler(
     let requester = "", priority = "", typeOfRequest = "", description = "",
       troubleshootingSteps = "", ticketId = "", ticketUrl = "";
 
-    for (const block of blocks) {
-      const b = block as Record<string, unknown>;
+    for (let i = 0; i < blocks.length; i++) {
+      const b = blocks[i] as Record<string, unknown>;
+      const textObj = b.text as { text?: string } | undefined;
+      log("debug", {
+        event: "extract_block",
+        index: i,
+        text: textObj?.text,
+        fields: b.fields,
+      });
 
       if (b.type === "section" && Array.isArray(b.fields)) {
         for (const field of b.fields as Array<Record<string, string>>) {
@@ -208,7 +215,9 @@ export default async function handler(
       }
     }
 
-    return { requester, priority, typeOfRequest, description, troubleshootingSteps, ticketId, ticketUrl };
+    const extracted = { requester, priority, typeOfRequest, description, troubleshootingSteps, ticketId, ticketUrl };
+    log("debug", { event: "extract_result", data: extracted });
+    return extracted;
   }
 
   const rawBlocks = (payload.message?.blocks ?? []) as unknown[];
