@@ -117,7 +117,8 @@ export default async function handler(
   const existingBlocks: unknown[] = JSON.parse(
     decodeURIComponent(JSON.stringify(payload.message?.blocks ?? []))
   );
-  const decodedBlocks = JSON.parse(JSON.stringify(existingBlocks).replace(/\+/g, ' '));
+  const decodedBlocks = (JSON.parse(JSON.stringify(existingBlocks).replace(/\+/g, ' ')) as Array<Record<string, unknown>>)
+    .map(({ block_id: _block_id, ...rest }) => rest);
 
   if (actionId === "take_ticket") {
     const userMap = env.SLACK_TO_CLICKUP_USER_MAP();
