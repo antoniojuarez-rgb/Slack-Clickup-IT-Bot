@@ -3,6 +3,7 @@
  */
 
 import crypto from "node:crypto";
+import { getRedis } from "./threadStore.js";
 
 const SLACK_SIGNATURE_PREFIX = "v0=";
 const MAX_AGE_SECONDS = 60 * 5; // 5 minutes
@@ -10,6 +11,10 @@ const RATE_LIMIT_PER_MINUTE = 10;
 
 // In-memory rate limit (per serverless instance). For multi-instance use Redis/Vercel KV.
 const rateLimitMap = new Map<string, number[]>();
+
+const RATE_LIMIT_IP_PER_MINUTE = 10;
+const RATE_LIMIT_IP_TTL_SECONDS = 60;
+const RATE_LIMIT_IP_PREFIX = "ratelimit:ip:";
 
 function getSlackSigningSecret(): string {
   return process.env.SLACK_SIGNING_SECRET ?? "";
@@ -57,6 +62,25 @@ export function checkRateLimit(identifier: string): boolean {
   }
   times.push(now);
   rateLimitMap.set(identifier, times);
+  return true;
+}
+
+/**
+ * Rate limit by IP: 10 requests per 60 seconds per IP (Redis).
+ * Key: ratelimit:ip:{ip}, TTL 60 seconds.
+ * Returns true if allowed, false if rate limited.
+ */
+export async function checkRateLimitByIp(ip: string): Promise<boolean> {
+  const redis = getRedis();
+  const key = `${RATE_LIMIT_IP_PREFIX}${ip}`;
+  const count = await redis.incr(key);
+  if (count === 1) {
+    await redis.expire(key, RATE_LIMIT_IP_TTL_SECONDS);
+  }
+  if (count > RATE_LIMIT_IP_PER_MINUTE) {
+    await redis.decr(key);
+    return false;
+  }
   return true;
 }
 

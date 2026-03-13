@@ -7,7 +7,7 @@ import { Redis } from "@upstash/redis";
 
 const TTL_SECONDS = 30 * 24 * 60 * 60; // 30 days
 
-function getRedis(): Redis {
+export function getRedis(): Redis {
   const url =
     process.env.UPSTASH_REDIS_REST_URL ?? process.env.UPSTASH_REDIS_URL;
   const token =

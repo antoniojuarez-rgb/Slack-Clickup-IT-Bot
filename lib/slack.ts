@@ -4,6 +4,7 @@
 
 import type { SlackMessageBlock } from "../types/slack.js";
 import { isHighPriority } from "./priority.js";
+import { log } from "../utils/logger.js";
 
 const SLACK_API_BASE = "https://slack.com/api";
 
@@ -11,6 +12,33 @@ function getBotToken(): string {
   const t = process.env.SLACK_BOT_TOKEN;
   if (!t) throw new Error("SLACK_BOT_TOKEN is not set");
   return t;
+}
+
+/**
+ * Call Slack API with 429 handling: wait Retry-After and retry once; then log and throw if still failing.
+ */
+async function slackApiFetch(url: string, init: RequestInit): Promise<Response> {
+  let res = await fetch(url, init);
+  if (res.status === 429) {
+    const retryAfterSec = Math.min(
+      120,
+      Math.max(1, parseInt(res.headers.get("Retry-After") ?? "60", 10) || 60)
+    );
+    await new Promise((r) => setTimeout(r, retryAfterSec * 1000));
+    res = await fetch(url, init);
+    if (res.status === 429 || !res.ok) {
+      const body = await res.json().catch(() => ({}));
+      const errMsg = (body as { error?: string }).error ?? `Slack API error: ${res.status}`;
+      log("api_error", { reason: "slack_429_retry_failed", status: res.status, details: errMsg });
+      throw new Error(errMsg);
+    }
+    return res;
+  }
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error((body as { error?: string }).error ?? `Slack API error: ${res.status}`);
+  }
+  return res;
 }
 
 export function buildTicketMessageBlocks(params: {
@@ -231,7 +259,7 @@ export async function postMessage(
   blocks: SlackMessageBlock[],
   text?: string
 ): Promise<{ ok: boolean; ts?: string; error?: string }> {
-  const res = await fetch(`${SLACK_API_BASE}/chat.postMessage`, {
+  const res = await slackApiFetch(`${SLACK_API_BASE}/chat.postMessage`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -245,8 +273,8 @@ export async function postMessage(
   });
 
   const data = (await res.json()) as { ok: boolean; ts?: string; error?: string };
-  if (!res.ok || !data.ok) {
-    throw new Error(data.error ?? `Slack API error: ${res.status}`);
+  if (!data.ok) {
+    throw new Error(data.error ?? "Slack API error");
   }
   return data;
 }
@@ -257,7 +285,7 @@ export async function updateMessage(
   blocks: SlackMessageBlock[],
   text?: string
 ): Promise<{ ok: boolean; error?: string; response_metadata?: unknown }> {
-  const res = await fetch(`${SLACK_API_BASE}/chat.update`, {
+  const res = await slackApiFetch(`${SLACK_API_BASE}/chat.update`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -277,17 +305,13 @@ export async function updateMessage(
     response_metadata?: unknown;
     [key: string]: unknown;
   };
-  if (!res.ok || !data.ok) {
-    console.error(
-      "[updateMessage] Slack API error:",
-      JSON.stringify({
-        ok: data.ok,
-        error: data.error,
-        response_metadata: data.response_metadata,
-        status: res.status,
-      })
-    );
-    throw new Error(data.error ?? `Slack API error: ${res.status}`);
+  if (!data.ok) {
+    log("api_error", {
+      reason: "slack_update_failed",
+      details: data.error,
+      response_metadata: data.response_metadata,
+    });
+    throw new Error(data.error ?? "Slack API error");
   }
   return data;
 }
@@ -320,7 +344,7 @@ export async function postEphemeral(
   userId: string,
   text: string
 ): Promise<void> {
-  const res = await fetch(`${SLACK_API_BASE}/chat.postEphemeral`, {
+  const res = await slackApiFetch(`${SLACK_API_BASE}/chat.postEphemeral`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -333,8 +357,8 @@ export async function postEphemeral(
     }),
   });
   const data = (await res.json()) as { ok: boolean; error?: string };
-  if (!res.ok || !data.ok) {
-    throw new Error(data.error ?? `Slack API error: ${res.status}`);
+  if (!data.ok) {
+    throw new Error(data.error ?? "Slack API error");
   }
 }
 

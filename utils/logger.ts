@@ -2,6 +2,7 @@
  * Event logging. Never log tokens or API keys.
  */
 
+// Never log: CLICKUP_API_KEY, SLACK_BOT_TOKEN, SLACK_SIGNING_SECRET, UPSTASH_REDIS_*, SHEETS_WEBHOOK_SECRET
 const SENSITIVE_KEYS = [
   "token",
   "secret",
@@ -11,6 +12,11 @@ const SENSITIVE_KEYS = [
   "signing_secret",
   "api_key",
   "bot_token",
+  "clickup_api_key",
+  "slack_bot_token",
+  "slack_signing_secret",
+  "upstash_redis",
+  "sheets_webhook_secret",
 ];
 
 function sanitize(obj: unknown): unknown {

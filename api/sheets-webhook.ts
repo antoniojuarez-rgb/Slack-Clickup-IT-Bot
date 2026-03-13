@@ -11,7 +11,7 @@ import {
   postMessage,
 } from "../lib/slack.js";
 import { slackPriorityToClickUp } from "../lib/priority.js";
-import { checkRateLimit } from "../lib/security.js";
+import { checkRateLimit, checkRateLimitByIp } from "../lib/security.js";
 import { validateWorkflowPayload, getWorkflowFields } from "../utils/validator.js";
 import { log } from "../utils/logger.js";
 import { saveThreadMapping } from "../lib/threadStore.js";
@@ -23,9 +23,21 @@ export default async function handler(
   req: VercelRequest,
   res: VercelResponse
 ): Promise<void> {
-  log("debug", { event: "sheets_webhook_start", body: req.body });
+  log("debug", { event: "sheets_webhook_start" });
   if (req.method !== "POST") {
     res.status(405).json({ error: "Method not allowed" });
+    return;
+  }
+
+  const clientIp =
+    (typeof req.headers["x-forwarded-for"] === "string"
+      ? req.headers["x-forwarded-for"].split(",")[0].trim()
+      : null) ??
+    (typeof req.headers["x-real-ip"] === "string" ? req.headers["x-real-ip"] : null) ??
+    "unknown";
+  if (!(await checkRateLimitByIp(clientIp))) {
+    log("security_reject", { reason: "rate_limited_ip" });
+    res.status(429).json({ error: "Too many requests" });
     return;
   }
 
@@ -151,6 +163,6 @@ export default async function handler(
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     log("api_error", { reason: message });
-    res.status(500).json({ error: "Failed to create ticket", details: message });
+    res.status(500).json({ error: "Failed to create ticket" });
   }
 }
