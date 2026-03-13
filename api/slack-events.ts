@@ -6,7 +6,7 @@
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { verifySlackSignature, checkRateLimit } from "../lib/security.js";
-import { getTaskIdForThread } from "../lib/threadStore.js";
+import { getTaskIdFromThread } from "../lib/threadStore.js";
 import { postComment } from "../lib/clickup.js";
 import { log } from "../utils/logger.js";
 import { getRawBody } from "../utils/request.js";
@@ -88,7 +88,7 @@ export default async function handler(
     return;
   }
 
-  const taskId = getTaskIdForThread(event.thread_ts);
+  const taskId = await getTaskIdFromThread(event.thread_ts);
   if (!taskId) {
     // No mapped task for this thread — ignore
     res.status(200).end();

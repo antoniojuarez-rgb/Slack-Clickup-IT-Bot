@@ -15,6 +15,11 @@ import {
   postMessageInThread,
 } from "../lib/slack.js";
 import { env } from "../config/env.js";
+import {
+  saveReopenTimestamp,
+  getReopenTimestamp,
+  clearReopenTimestamp,
+} from "../lib/threadStore.js";
 import { log } from "../utils/logger.js";
 import { getRawBody } from "../utils/request.js";
 
@@ -239,10 +244,14 @@ export default async function handler(
   } else if (actionId === "close_ticket") {
     // Feature 1: Copy Slack thread to ClickUp as a single comment before closing
     try {
+      const reopenTs = await getReopenTimestamp(taskId);
       const replies = await getThreadReplies(channelId, messageTs);
       const skipFirst = replies.slice(1);
+      const afterReopen = reopenTs
+        ? skipFirst.filter((msg) => msg.ts && parseFloat(msg.ts) > parseFloat(reopenTs))
+        : skipFirst;
       const lines: string[] = [];
-      for (const msg of skipFirst) {
+      for (const msg of afterReopen) {
         const userId = msg.user ?? "";
         let name = "Unknown";
         if (userId) {
@@ -258,6 +267,7 @@ export default async function handler(
       const commentText =
         "--- Slack Thread History ---\n\n" + (threadBody || "(no replies in thread)");
       await postComment(taskId, commentText);
+      await clearReopenTimestamp(taskId);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
       log("api_error", { reason: "thread_to_clickup_failed", details: message });
@@ -305,8 +315,10 @@ export default async function handler(
     }
   } else if (actionId === "reopen_ticket") {
     try {
+      await saveReopenTimestamp(taskId, messageTs);
       const reopenStatus = env.CLICKUP_REOPEN_STATUS();
       await reopenTask(taskId, reopenStatus);
+      await postComment(taskId, `🔄 Issue reabierto por ${displayName}`);
       log("ticket_reopened", { taskId, slackUserId });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";

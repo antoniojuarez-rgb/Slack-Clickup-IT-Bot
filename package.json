@@ -10,6 +10,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@upstash/redis": "^1.37.0",
     "@vercel/node": "^3.0.0"
   },
   "devDependencies": {

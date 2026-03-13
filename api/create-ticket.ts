@@ -113,7 +113,7 @@ export default async function handler(
 
     const msgResult = await postMessage(channelId, blocks);
     if (msgResult.ts) {
-      saveThreadMapping(msgResult.ts, taskId);
+      await saveThreadMapping(msgResult.ts, taskId);
     }
 
     log("ticket_created", {
