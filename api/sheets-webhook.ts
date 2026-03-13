@@ -4,7 +4,7 @@
  */
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { createTask, getTask, getTaskUrl } from "../lib/clickup.js";
+import { createTask, getTask, getTaskUrl, setCustomField } from "../lib/clickup.js";
 import {
   buildTicketMessageBlocks,
   maybeAddHighPriorityMention,
@@ -23,6 +23,7 @@ export default async function handler(
   req: VercelRequest,
   res: VercelResponse
 ): Promise<void> {
+  log("debug", { event: "sheets_webhook_start", body: req.body });
   if (req.method !== "POST") {
     res.status(405).json({ error: "Method not allowed" });
     return;
@@ -84,15 +85,17 @@ export default async function handler(
   const { requester, description, priority, type_of_request, troubleshooting_steps } =
     getWorkflowFields(payload);
 
-  const taskName = `[${type_of_request || "Request"}] ${description.slice(0, 80)}${description.length > 80 ? "…" : ""}`;
+  const taskName = `${type_of_request || "Request"} | ${priority} | ${requester}`;
   const taskDescription = [
-    `**Requester:** ${requester}`,
-    `**Priority:** ${priority}`,
-    `**Type:** ${type_of_request}`,
+    `Requester: ${requester}`,
+    `Priority: ${priority}`,
+    `Type: ${type_of_request}`,
     ``,
     description,
-    troubleshooting_steps ? `\n**Troubleshooting:**\n${troubleshooting_steps}` : "",
+    troubleshooting_steps ? `\nTroubleshooting:\n${troubleshooting_steps}` : "",
   ].join("\n");
+
+  log("debug", { event: "create_ticket_payload", name: taskName, description: taskDescription });
 
   try {
     const created = await createTask(listId, {
@@ -120,7 +123,20 @@ export default async function handler(
 
     const msgResult = await postMessage(channelId, blocks);
     if (msgResult.ts) {
-      saveThreadMapping(msgResult.ts, taskId);
+      await saveThreadMapping(msgResult.ts, taskId);
+      const threadTsSlug = msgResult.ts.replace(".", "");
+      const slackThreadUrl = `https://felixpago.slack.com/archives/${channelId}/p${threadTsSlug}`;
+      log("debug", { event: "slack_thread_url", url: slackThreadUrl, taskId });
+      try {
+        await setCustomField(
+          taskId,
+          "c93b86cd-a64f-44a8-8df7-f237dbdec893",
+          slackThreadUrl
+        );
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Unknown error";
+        log("api_error", { reason: "clickup_slack_thread_field_failed", details: msg });
+      }
     }
 
     log("ticket_created", {

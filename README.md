@@ -73,7 +73,7 @@ When in doubt, use **Medium**. Reserve **Critical** and **High** for issues that
 
 ```
 /api
-  create-ticket.ts       ← Slack webhook → ClickUp task → Slack message
+  sheets-webhook.ts      ← Google Sheets / webhook → ClickUp task → Slack message
   slack-interaction.ts   ← Take Ticket / Close Ticket button handler
   slack-events.ts        ← Thread replies → ClickUp comments
   take-ticket.ts         ← Alias for slack-interaction
@@ -104,7 +104,7 @@ When in doubt, use **Medium**. Reserve **Critical** and **High** for issues that
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| POST | `/api/create-ticket` | Receive Slack workflow webhook, create ClickUp task, post to Slack |
+| POST | `/api/sheets-webhook` | Receive webhook (e.g. Google Apps Script), create ClickUp task, post to Slack |
 | POST | `/api/slack-interaction` | Handle Take Ticket and Close Ticket button clicks |
 | POST | `/api/slack-events` | Slack Events API: url_verification + thread replies → ClickUp comments |
 | POST | `/api/take-ticket` | Alias for `/api/slack-interaction` |
