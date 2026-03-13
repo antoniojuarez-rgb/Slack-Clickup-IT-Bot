@@ -8,8 +8,6 @@ import { verifySlackSignature, checkRateLimit } from "../lib/security.js";
 import { updateTask, closeTask } from "../lib/clickup.js";
 import {
   buildTicketMessageBlocks,
-  markBlocksAsClaimed,
-  markBlocksAsClosed,
   updateMessage,
   getSlackUserInfo,
 } from "../lib/slack.js";
@@ -114,27 +112,51 @@ export default async function handler(
     // keep displayName as <@id>
   }
 
-  const existingBlocks: unknown[] = JSON.parse(
-    decodeURIComponent(JSON.stringify(payload.message?.blocks ?? []))
-  );
+  function extractDataFromBlocks(blocks: unknown[]): {
+    requester: string;
+    priority: string;
+    typeOfRequest: string;
+    description: string;
+    troubleshootingSteps: string;
+    ticketId: string;
+    ticketUrl: string;
+  } {
+    let requester = "", priority = "", typeOfRequest = "", description = "",
+      troubleshootingSteps = "", ticketId = "", ticketUrl = "";
 
-  function cleanBlocks(value: unknown): unknown {
-    if (Array.isArray(value)) return value.map(cleanBlocks);
-    if (value !== null && typeof value === "object") {
-      const obj = value as Record<string, unknown>;
-      const cleaned: Record<string, unknown> = {};
-      for (const key of Object.keys(obj)) {
-        if (key === "block_id" || key === "verbatim") continue;
-        cleaned[key] = cleanBlocks(obj[key]);
+    for (const block of blocks) {
+      const b = block as Record<string, unknown>;
+
+      if (b.type === "section" && Array.isArray(b.fields)) {
+        for (const field of b.fields as Array<Record<string, string>>) {
+          const text = field.text ?? "";
+          const rm = text.match(/^\*Requester:\*\n([\s\S]+)$/);
+          if (rm) requester = rm[1].trim();
+          const pm = text.match(/^\*Priority:\*\n([\s\S]+)$/);
+          if (pm) priority = pm[1].trim();
+          const tm = text.match(/^\*Type:\*\n([\s\S]+)$/);
+          if (tm) typeOfRequest = tm[1].trim();
+          const idm = text.match(/^\*Ticket ID:\*\n<([^|]+)\|([^>]+)>$/);
+          if (idm) { ticketUrl = idm[1]; ticketId = idm[2]; }
+        }
       }
-      return cleaned;
+
+      if (b.type === "section" && b.text && typeof (b.text as Record<string, string>).text === "string") {
+        const text = (b.text as Record<string, string>).text;
+        const dm = text.match(/^\*Description:\*\n([\s\S]+)$/);
+        if (dm && dm[1] !== "_No description_") description = dm[1].trim();
+        const tsm = text.match(/^\*Troubleshooting steps:\*\n([\s\S]+)$/);
+        if (tsm) troubleshootingSteps = tsm[1].trim();
+      }
     }
-    return value;
+
+    return { requester, priority, typeOfRequest, description, troubleshootingSteps, ticketId, ticketUrl };
   }
 
-  const decodedBlocks = cleanBlocks(
-    JSON.parse(JSON.stringify(existingBlocks).replace(/\+/g, " "))
-  ) as Array<Record<string, unknown>>;
+  const rawBlocks = (payload.message?.blocks ?? []) as unknown[];
+  const extracted = extractDataFromBlocks(rawBlocks);
+  const ticketUrl = extracted.ticketUrl || `https://app.clickup.com/t/${taskId}`;
+  const ticketId = extracted.ticketId || `ITOPS-${taskId.slice(-6)}`;
 
   if (actionId === "take_ticket") {
     const userMap = env.SLACK_TO_CLICKUP_USER_MAP();
@@ -151,21 +173,18 @@ export default async function handler(
 
     log("ticket_claimed", { taskId, slackUserId });
 
-    const blocks =
-      decodedBlocks.length > 0
-        ? markBlocksAsClaimed(decodedBlocks, displayName)
-        : buildTicketMessageBlocks({
-            requester: "",
-            priority: "",
-            typeOfRequest: "",
-            description: "",
-            troubleshootingSteps: "",
-            ticketId: `ITOPS-${taskId.slice(-6)}`,
-            taskId,
-            ticketUrl: `https://app.clickup.com/t/${taskId}`,
-            isClaimed: true,
-            claimedBy: displayName,
-          });
+    const blocks = buildTicketMessageBlocks({
+      requester: extracted.requester,
+      priority: extracted.priority,
+      typeOfRequest: extracted.typeOfRequest,
+      description: extracted.description,
+      troubleshootingSteps: extracted.troubleshootingSteps,
+      ticketId,
+      taskId,
+      ticketUrl,
+      isClaimed: true,
+      claimedBy: displayName,
+    });
 
     log("slack_update_blocks", { action: "take_ticket", blocks: JSON.stringify(blocks) });
     try {
@@ -184,22 +203,19 @@ export default async function handler(
 
     log("ticket_closed", { taskId, slackUserId });
 
-    const blocks =
-      decodedBlocks.length > 0
-        ? markBlocksAsClosed(decodedBlocks, displayName)
-        : buildTicketMessageBlocks({
-            requester: "",
-            priority: "",
-            typeOfRequest: "",
-            description: "",
-            troubleshootingSteps: "",
-            ticketId: `ITOPS-${taskId.slice(-6)}`,
-            taskId,
-            ticketUrl: `https://app.clickup.com/t/${taskId}`,
-            isClaimed: true,
-            isClosed: true,
-            closedBy: displayName,
-          });
+    const blocks = buildTicketMessageBlocks({
+      requester: extracted.requester,
+      priority: extracted.priority,
+      typeOfRequest: extracted.typeOfRequest,
+      description: extracted.description,
+      troubleshootingSteps: extracted.troubleshootingSteps,
+      ticketId,
+      taskId,
+      ticketUrl,
+      isClaimed: true,
+      isClosed: true,
+      closedBy: displayName,
+    });
 
     log("slack_update_blocks", { action: "close_ticket", blocks: JSON.stringify(blocks) });
     try {
