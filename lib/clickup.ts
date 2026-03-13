@@ -57,7 +57,7 @@ export async function updateTask(
   payload: ClickUpUpdateTaskPayload
 ): Promise<ClickUpTaskResponse> {
   const res = await fetch(`${CLICKUP_BASE}/task/${taskId}`, {
-    method: "POST",
+    method: "PUT",
     headers: getHeaders(),
     body: JSON.stringify({
       assignees: { add: payload.assignees?.add ?? [] },

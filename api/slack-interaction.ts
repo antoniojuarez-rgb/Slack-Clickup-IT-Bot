@@ -147,6 +147,7 @@ export default async function handler(
             claimedBy: displayName,
           });
 
+    log("slack_update_blocks", { action: "take_ticket", blocks: JSON.stringify(blocks) });
     try {
       await updateMessage(channelId, messageTs, blocks);
     } catch (err) {
@@ -180,6 +181,7 @@ export default async function handler(
             closedBy: displayName,
           });
 
+    log("slack_update_blocks", { action: "close_ticket", blocks: JSON.stringify(blocks) });
     try {
       await updateMessage(channelId, messageTs, blocks);
     } catch (err) {
