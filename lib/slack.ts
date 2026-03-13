@@ -134,7 +134,6 @@ export function buildTicketMessageBlocks(params: {
   blocks.push({
     type: "actions",
     elements: actions,
-    block_id: `ticket_${taskId}`,
   });
 
   return blocks;
