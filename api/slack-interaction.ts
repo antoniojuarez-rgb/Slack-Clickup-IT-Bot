@@ -170,6 +170,11 @@ export default async function handler(
     // keep displayName as <@id>
   }
 
+  /** Decode + to space so URL-encoded payload from Slack matches our regexes. */
+  function decodeSpaces(s: string): string {
+    return s.replace(/\+/g, " ").trim();
+  }
+
   function extractDataFromBlocks(blocks: unknown[]): {
     requester: string;
     priority: string;
@@ -194,24 +199,29 @@ export default async function handler(
 
       if (b.type === "section" && Array.isArray(b.fields)) {
         for (const field of b.fields as Array<Record<string, string>>) {
-          const text = field.text ?? "";
+          const raw = field.text ?? "";
+          const text = decodeSpaces(raw);
           const rm = text.match(/^\*Requester:\*\n([\s\S]+)$/);
-          if (rm) requester = rm[1].replace(/\+/g, ' ').trim();
+          if (rm) requester = decodeSpaces(rm[1]);
           const pm = text.match(/^\*Priority:\*\n([\s\S]+)$/);
-          if (pm) priority = pm[1].replace(/\+/g, ' ').trim();
+          if (pm) priority = decodeSpaces(pm[1]);
           const tm = text.match(/^\*Type:\*\n([\s\S]+)$/);
-          if (tm) typeOfRequest = tm[1].replace(/\+/g, ' ').trim();
+          if (tm) typeOfRequest = decodeSpaces(tm[1]);
           const idm = text.match(/^\*Ticket ID:\*\n<([^|]+)\|([^>]+)>$/);
-          if (idm) { ticketUrl = idm[1].replace(/\+/g, ' ').trim(); ticketId = idm[2].replace(/\+/g, ' ').trim(); }
+          if (idm) {
+            ticketUrl = decodeSpaces(idm[1]);
+            ticketId = decodeSpaces(idm[2]);
+          }
         }
       }
 
       if (b.type === "section" && b.text && typeof (b.text as Record<string, string>).text === "string") {
-        const text = (b.text as Record<string, string>).text;
+        const raw = (b.text as Record<string, string>).text;
+        const text = decodeSpaces(raw);
         const dm = text.match(/^\*Description:\*\n([\s\S]+)$/);
-        if (dm && dm[1] !== "_No description_") description = dm[1].replace(/\+/g, ' ').trim();
+        if (dm && dm[1] !== "_No description_") description = decodeSpaces(dm[1]);
         const tsm = text.match(/^\*Troubleshooting steps:\*\n([\s\S]+)$/);
-        if (tsm) troubleshootingSteps = tsm[1].replace(/\+/g, ' ').trim();
+        if (tsm) troubleshootingSteps = decodeSpaces(tsm[1]);
       }
     }
 

@@ -87,6 +87,8 @@ export default async function handler(
     troubleshooting_steps ? `\nTroubleshooting:\n${troubleshooting_steps}` : "",
   ].join("\n");
 
+  log("debug", { event: "create_ticket_payload", name: taskName, description: taskDescription });
+
   try {
     const created = await createTask(listId, {
       name: taskName,
@@ -116,6 +118,7 @@ export default async function handler(
       await saveThreadMapping(msgResult.ts, taskId);
       const threadTsSlug = msgResult.ts.replace(".", "");
       const slackThreadUrl = `https://felixpago.slack.com/archives/${channelId}/p${threadTsSlug}`;
+      log("debug", { event: "slack_thread_url", url: slackThreadUrl, taskId });
       try {
         await setCustomField(
           taskId,
