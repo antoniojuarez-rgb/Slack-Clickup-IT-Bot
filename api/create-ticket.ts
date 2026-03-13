@@ -3,7 +3,7 @@
  */
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { createTask, getTask, getTaskUrl } from "../lib/clickup.js";
+import { createTask, getTask, getTaskUrl, setCustomField } from "../lib/clickup.js";
 import {
   buildTicketMessageBlocks,
   maybeAddHighPriorityMention,
@@ -114,6 +114,18 @@ export default async function handler(
     const msgResult = await postMessage(channelId, blocks);
     if (msgResult.ts) {
       await saveThreadMapping(msgResult.ts, taskId);
+      const threadTsSlug = msgResult.ts.replace(".", "");
+      const slackThreadUrl = `https://felixpago.slack.com/archives/${channelId}/p${threadTsSlug}`;
+      try {
+        await setCustomField(
+          taskId,
+          "c93b86cd-a64f-44a8-8df7-f237dbdec893",
+          slackThreadUrl
+        );
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Unknown error";
+        log("api_error", { reason: "clickup_slack_thread_field_failed", details: msg });
+      }
     }
     if (slackUserId) {
       await saveReporter(taskId, slackUserId);

@@ -123,3 +123,25 @@ export async function reopenTask(
 export function getTaskUrl(taskId: string): string {
   return `https://app.clickup.com/t/${taskId}`;
 }
+
+/**
+ * Set a custom field value on a task (POST /task/{taskId}/field/{fieldId}).
+ */
+export async function setCustomField(
+  taskId: string,
+  fieldId: string,
+  value: string
+): Promise<void> {
+  const res = await fetch(
+    `${CLICKUP_BASE}/task/${taskId}/field/${fieldId}`,
+    {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify({ value }),
+    }
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`ClickUp set custom field failed: ${res.status} ${text}`);
+  }
+}
