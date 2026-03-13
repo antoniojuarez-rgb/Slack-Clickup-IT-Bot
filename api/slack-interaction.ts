@@ -206,7 +206,7 @@ export default async function handler(
 
       log("slack_update_blocks", { action: "take_ticket", blocks: JSON.stringify(blocks) });
     try {
-      await updateMessage(channelId, messageTs, cleanBlocks(blocks) as SlackMessageBlock[]);
+      await updateMessage(channelId, messageTs, cleanBlocks(blocks) as any[]);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
       log("api_error", { reason: "slack_update_failed", details: message });
@@ -237,7 +237,7 @@ export default async function handler(
 
     log("slack_update_blocks", { action: "close_ticket", blocks: JSON.stringify(blocks) });
     try {
-      await updateMessage(channelId, messageTs, cleanBlocks(blocks) as SlackMessageBlock[]);
+      await updateMessage(channelId, messageTs, cleanBlocks(blocks) as any[]);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
       log("api_error", { reason: "slack_update_failed", details: message });
