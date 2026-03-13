@@ -96,20 +96,13 @@ export function buildTicketMessageBlocks(params: {
     },
   ];
 
+  // Slack API does not accept disabled on buttons (invalid_blocks). Omit claimed/closed buttons instead.
   if (!isClaimed && !isClosed) {
     (actions as Record<string, unknown>[]).push({
       type: "button",
       text: { type: "plain_text", text: "Take Ticket", emoji: true },
       value: taskId,
       action_id: "take_ticket",
-    });
-  } else {
-    (actions as Record<string, unknown>[]).push({
-      type: "button",
-      text: { type: "plain_text", text: "Take Ticket", emoji: true },
-      value: taskId,
-      action_id: "take_ticket",
-      disabled: true,
     });
   }
 
@@ -121,15 +114,8 @@ export function buildTicketMessageBlocks(params: {
       action_id: "close_ticket",
       style: "danger",
     });
-  } else if (isClosed) {
-    (actions as Record<string, unknown>[]).push({
-      type: "button",
-      text: { type: "plain_text", text: "Close Ticket", emoji: true },
-      value: taskId,
-      action_id: "close_ticket",
-      disabled: true,
-    });
   }
+  // When isClosed: only Open Ticket; no Take/Close buttons
 
   blocks.push({
     type: "actions",
@@ -140,7 +126,7 @@ export function buildTicketMessageBlocks(params: {
 }
 
 /**
- * Clone existing message blocks, disable Take Ticket button, and add "Claimed by" context.
+ * Clone existing message blocks, remove Take Ticket button (Slack API rejects disabled), add "Claimed by" context.
  */
 export function markBlocksAsClaimed(
   existingBlocks: unknown[],
@@ -151,9 +137,10 @@ export function markBlocksAsClaimed(
   for (let i = 0; i < blocks.length; i++) {
     const b = blocks[i];
     if (b.type === "actions" && Array.isArray(b.elements)) {
-      for (const el of b.elements as Record<string, unknown>[]) {
-        if (el.action_id === "take_ticket") el.disabled = true;
-      }
+      const elements = (b.elements as Record<string, unknown>[]).filter(
+        (el) => el.action_id !== "take_ticket"
+      );
+      (b as { elements: unknown[] }).elements = elements;
     }
     if (b.type === "context" && !claimedContextInserted) {
       (b as { elements?: unknown[] }).elements = [
@@ -175,7 +162,7 @@ export function markBlocksAsClaimed(
 }
 
 /**
- * Clone existing message blocks, disable both Take Ticket and Close Ticket buttons,
+ * Clone existing message blocks, remove Take Ticket and Close Ticket buttons (Slack API rejects disabled),
  * and replace/add a "Closed by" context block.
  */
 export function markBlocksAsClosed(
@@ -187,12 +174,10 @@ export function markBlocksAsClosed(
   for (let i = 0; i < blocks.length; i++) {
     const b = blocks[i];
     if (b.type === "actions" && Array.isArray(b.elements)) {
-      for (const el of b.elements as Record<string, unknown>[]) {
-        if (el.action_id === "take_ticket" || el.action_id === "close_ticket") {
-          el.disabled = true;
-          delete el.style;
-        }
-      }
+      const elements = (b.elements as Record<string, unknown>[]).filter(
+        (el) => el.action_id !== "take_ticket" && el.action_id !== "close_ticket"
+      );
+      (b as { elements: unknown[] }).elements = elements;
     }
     if (b.type === "context" && !closedContextInserted) {
       (b as { elements?: unknown[] }).elements = [
@@ -258,7 +243,7 @@ export async function updateMessage(
   messageTs: string,
   blocks: SlackMessageBlock[],
   text?: string
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; error?: string; response_metadata?: unknown }> {
   const res = await fetch(`${SLACK_API_BASE}/chat.update`, {
     method: "POST",
     headers: {
@@ -273,8 +258,22 @@ export async function updateMessage(
     }),
   });
 
-  const data = (await res.json()) as { ok: boolean; error?: string };
+  const data = (await res.json()) as {
+    ok: boolean;
+    error?: string;
+    response_metadata?: unknown;
+    [key: string]: unknown;
+  };
   if (!res.ok || !data.ok) {
+    console.error(
+      "[updateMessage] Slack API error:",
+      JSON.stringify({
+        ok: data.ok,
+        error: data.error,
+        response_metadata: data.response_metadata,
+        status: res.status,
+      })
+    );
     throw new Error(data.error ?? `Slack API error: ${res.status}`);
   }
   return data;
