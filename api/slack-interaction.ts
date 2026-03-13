@@ -329,11 +329,11 @@ export default async function handler(
       const closedTs = await getClosedTs(taskId);
       if (closedTs) {
         const closedAt = parseFloat(closedTs) * 1000;
-        if (Date.now() - closedAt < 24 * 60 * 60 * 1000) {
+        if (Date.now() - closedAt > 24 * 60 * 60 * 1000) {
           await postEphemeral(
             channelId,
             slackUserId,
-            "⚠️ Este ticket fue cerrado hace menos de 24 horas. Por favor abre un ticket nuevo."
+            "⚠️ Han pasado más de 24 horas desde que se cerró el ticket. Por favor abre un ticket nuevo."
           );
           res.status(200).end();
           return;
