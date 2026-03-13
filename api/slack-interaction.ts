@@ -114,7 +114,9 @@ export default async function handler(
     // keep displayName as <@id>
   }
 
-  const existingBlocks = payload.message?.blocks ?? [];
+  const existingBlocks: unknown[] = JSON.parse(
+    decodeURIComponent(JSON.stringify(payload.message?.blocks ?? []))
+  );
 
   if (actionId === "take_ticket") {
     const userMap = env.SLACK_TO_CLICKUP_USER_MAP();
