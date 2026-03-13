@@ -117,6 +117,7 @@ export default async function handler(
   const existingBlocks: unknown[] = JSON.parse(
     decodeURIComponent(JSON.stringify(payload.message?.blocks ?? []))
   );
+  const decodedBlocks = JSON.parse(JSON.stringify(existingBlocks).replace(/\+/g, ' '));
 
   if (actionId === "take_ticket") {
     const userMap = env.SLACK_TO_CLICKUP_USER_MAP();
@@ -134,8 +135,8 @@ export default async function handler(
     log("ticket_claimed", { taskId, slackUserId });
 
     const blocks =
-      existingBlocks.length > 0
-        ? markBlocksAsClaimed(existingBlocks, displayName)
+      decodedBlocks.length > 0
+        ? markBlocksAsClaimed(decodedBlocks, displayName)
         : buildTicketMessageBlocks({
             requester: "",
             priority: "",
@@ -167,8 +168,8 @@ export default async function handler(
     log("ticket_closed", { taskId, slackUserId });
 
     const blocks =
-      existingBlocks.length > 0
-        ? markBlocksAsClosed(existingBlocks, displayName)
+      decodedBlocks.length > 0
+        ? markBlocksAsClosed(decodedBlocks, displayName)
         : buildTicketMessageBlocks({
             requester: "",
             priority: "",
