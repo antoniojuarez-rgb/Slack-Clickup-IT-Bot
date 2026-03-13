@@ -13,6 +13,7 @@ import {
   updateMessage,
   getSlackUserInfo,
   getThreadReplies,
+  getChannelMessage,
   postMessageInThread,
   postEphemeral,
 } from "../lib/slack.js";
@@ -326,6 +327,21 @@ export default async function handler(
     }
   } else if (actionId === "reopen_ticket") {
     try {
+      const mainMessageTs = (payload.message as { thread_ts?: string })?.thread_ts;
+      if (!mainMessageTs) {
+        log("api_error", { reason: "reopen_missing_thread_ts", taskId });
+        res.status(200).end();
+        return;
+      }
+
+      const mainMessage = await getChannelMessage(channelId, mainMessageTs);
+      const mainBlocks = (mainMessage?.blocks ?? []) as unknown[];
+      const extracted = extractDataFromBlocks(mainBlocks);
+      const ticketUrl =
+        extracted.ticketUrl || `https://app.clickup.com/t/${taskId}`;
+      const ticketId =
+        extracted.ticketId || `ITOPS-${taskId.slice(-6)}`;
+
       const closedTs = await getClosedTs(taskId);
       if (closedTs) {
         const closedAt = parseFloat(closedTs) * 1000;
@@ -383,7 +399,7 @@ export default async function handler(
         (assigneeId
           ? `<@${assigneeId}> da seguimiento por favor.`
           : "Da seguimiento por favor.");
-      await postMessageInThread(channelId, messageTs, threadReopenText);
+      await postMessageInThread(channelId, mainMessageTs, threadReopenText);
 
       const closureBlocksOnlyContext: SlackMessageBlock[] = [
         {
@@ -400,10 +416,7 @@ export default async function handler(
       ];
       await updateMessage(channelId, messageTs, closureBlocksOnlyContext);
 
-      const mainMessageTs =
-        (payload.message as { thread_ts?: string } | undefined)?.thread_ts ??
-        messageTs;
-      const mainBlocks = buildTicketMessageBlocks({
+      const mainBlocksRebuilt = buildTicketMessageBlocks({
         requester: extracted.requester,
         priority: extracted.priority,
         typeOfRequest: extracted.typeOfRequest,
@@ -415,7 +428,11 @@ export default async function handler(
         isClaimed: true,
         claimedBy: assigneeDisplay,
       });
-      await updateMessage(channelId, mainMessageTs, cleanBlocks(mainBlocks) as any[]);
+      await updateMessage(
+        channelId,
+        mainMessageTs,
+        cleanBlocks(mainBlocksRebuilt) as any[]
+      );
 
       log("ticket_reopened", { taskId, slackUserId });
     } catch (err) {

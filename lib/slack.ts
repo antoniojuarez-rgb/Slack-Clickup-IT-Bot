@@ -334,6 +334,34 @@ export interface SlackThreadMessage {
 }
 
 /**
+ * Fetch a single message by ts (conversations.history with latest + inclusive).
+ * Use to get the main ticket message when handling reopen from the closure message.
+ */
+export async function getChannelMessage(
+  channelId: string,
+  messageTs: string
+): Promise<{ blocks?: unknown[]; [key: string]: unknown } | null> {
+  const params = new URLSearchParams({
+    channel: channelId,
+    latest: messageTs,
+    limit: "1",
+    inclusive: "true",
+  });
+  const res = await fetch(`${SLACK_API_BASE}/conversations.history?${params}`, {
+    headers: { Authorization: `Bearer ${getBotToken()}` },
+  });
+  const data = (await res.json()) as {
+    ok: boolean;
+    messages?: Array<{ blocks?: unknown[]; [key: string]: unknown }>;
+    error?: string;
+  };
+  if (!data.ok || !Array.isArray(data.messages) || data.messages.length === 0) {
+    return null;
+  }
+  return data.messages[0] ?? null;
+}
+
+/**
  * Fetch all messages in a thread (conversations.replies).
  * First message is the parent; use thread_ts as the parent message ts.
  */
