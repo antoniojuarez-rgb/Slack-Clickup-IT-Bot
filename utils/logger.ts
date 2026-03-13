@@ -35,7 +35,8 @@ export type LogEvent =
   | "comment_synced"
   | "api_error"
   | "validation_error"
-  | "security_reject";
+  | "security_reject"
+  | "slack_update_blocks";
 
 export function log(event: LogEvent, details?: Record<string, unknown>): void {
   const payload = {
