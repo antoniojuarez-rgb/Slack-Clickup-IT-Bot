@@ -45,7 +45,14 @@ export function buildTicketMessageBlocks(params: {
   const blocks: SlackMessageBlock[] = [
     {
       type: "header",
-      text: { type: "plain_text", text: "🎫 New IT Helpdesk Ticket", emoji: true },
+      text: { type: "plain_text", text: "💻 New IT TechStop Ticket", emoji: true },
+    },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: "Thank you for reaching out to TechStop! We will review your request and get back to you shortly. :bufo-salute:",
+      },
     },
     {
       type: "section",
