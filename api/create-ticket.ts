@@ -77,14 +77,14 @@ export default async function handler(
   const { requester, description, priority, type_of_request, troubleshooting_steps } =
     getWorkflowFields(payload);
 
-  const taskName = `[${type_of_request || "Request"}] ${description.slice(0, 80)}${description.length > 80 ? "…" : ""}`;
+  const taskName = `${type_of_request || "Request"} | ${priority} | ${requester}`;
   const taskDescription = [
-    `**Requester:** ${requester}`,
-    `**Priority:** ${priority}`,
-    `**Type:** ${type_of_request}`,
+    `Requester: ${requester}`,
+    `Priority: ${priority}`,
+    `Type: ${type_of_request}`,
     ``,
     description,
-    troubleshooting_steps ? `\n**Troubleshooting:**\n${troubleshooting_steps}` : "",
+    troubleshooting_steps ? `\nTroubleshooting:\n${troubleshooting_steps}` : "",
   ].join("\n");
 
   try {

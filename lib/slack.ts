@@ -42,6 +42,12 @@ export function buildTicketMessageBlocks(params: {
     closedBy,
   } = params;
 
+  const SLACK_BLOCK_TEXT_MAX = 2900;
+  const truncate = (s: string): string =>
+    s.length <= SLACK_BLOCK_TEXT_MAX ? s : s.slice(0, SLACK_BLOCK_TEXT_MAX) + "... (truncated)";
+  const safeDescription = truncate(description || "_No description_");
+  const safeTroubleshooting = troubleshootingSteps ? truncate(troubleshootingSteps) : "";
+
   const blocks: SlackMessageBlock[] = [
     {
       type: "header",
@@ -67,17 +73,17 @@ export function buildTicketMessageBlocks(params: {
       type: "section",
       text: {
         type: "mrkdwn",
-        text: `*Description:*\n${description || "_No description_"}`,
+        text: `*Description:*\n${safeDescription}`,
       },
     },
   ];
 
-  if (troubleshootingSteps) {
+  if (safeTroubleshooting) {
     blocks.push({
       type: "section",
       text: {
         type: "mrkdwn",
-        text: `*Troubleshooting steps:*\n${troubleshootingSteps}`,
+        text: `*Troubleshooting steps:*\n${safeTroubleshooting}`,
       },
     });
   }
