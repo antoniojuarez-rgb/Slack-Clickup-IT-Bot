@@ -33,6 +33,7 @@ export const env = {
   SLACK_BOT_TOKEN: () => getEnv("SLACK_BOT_TOKEN"),
   SLACK_SIGNING_SECRET: () => getEnv("SLACK_SIGNING_SECRET"),
   SLACK_CHANNEL_ID: () => getEnv("SLACK_CHANNEL_ID"),
+  SLACK_ALERTS_CHANNEL_ID: () => getEnv("SLACK_ALERTS_CHANNEL_ID"),
   ITOPS_TEAM_TAG: () => getEnvOptional("ITOPS_TEAM_TAG", "@itopsteam"),
   SLACK_TO_CLICKUP_USER_MAP: getSlackToClickUpUserMap,
   /** ClickUp status name when reopening a task (e.g. "open", "to do"). Default: "open" */

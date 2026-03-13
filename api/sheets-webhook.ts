@@ -15,6 +15,7 @@ import { checkRateLimit, checkRateLimitByIp } from "../lib/security.js";
 import { validateWorkflowPayload, getWorkflowFields } from "../utils/validator.js";
 import { log } from "../utils/logger.js";
 import { saveThreadMapping } from "../lib/threadStore.js";
+import { sendAlert } from "../lib/alerts.js";
 import { getRawBody } from "../utils/request.js";
 
 export const config = { api: { bodyParser: false } };
@@ -163,6 +164,12 @@ export default async function handler(
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     log("api_error", { reason: message });
+    await sendAlert("error", "ticket_creation_failed", {
+      Requester: requester,
+      Type: type_of_request,
+      Priority: priority,
+      Error: message,
+    });
     res.status(500).json({ error: "Failed to create ticket" });
   }
 }

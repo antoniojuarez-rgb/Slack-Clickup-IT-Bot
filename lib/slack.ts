@@ -5,6 +5,7 @@
 import type { SlackMessageBlock } from "../types/slack.js";
 import { isHighPriority } from "./priority.js";
 import { log } from "../utils/logger.js";
+import { sendAlert } from "./alerts.js";
 
 const SLACK_API_BASE = "https://slack.com/api";
 
@@ -30,6 +31,7 @@ async function slackApiFetch(url: string, init: RequestInit): Promise<Response> 
       const body = await res.json().catch(() => ({}));
       const errMsg = (body as { error?: string }).error ?? `Slack API error: ${res.status}`;
       log("api_error", { reason: "slack_429_retry_failed", status: res.status, details: errMsg });
+      await sendAlert("error", "slack_429_retry_failed", { endpoint: url, status: res.status });
       throw new Error(errMsg);
     }
     return res;
