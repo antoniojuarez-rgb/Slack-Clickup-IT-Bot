@@ -117,8 +117,24 @@ export default async function handler(
   const existingBlocks: unknown[] = JSON.parse(
     decodeURIComponent(JSON.stringify(payload.message?.blocks ?? []))
   );
-  const decodedBlocks = (JSON.parse(JSON.stringify(existingBlocks).replace(/\+/g, ' ')) as Array<Record<string, unknown>>)
-    .map(({ block_id: _block_id, ...rest }) => rest);
+
+  function cleanBlocks(value: unknown): unknown {
+    if (Array.isArray(value)) return value.map(cleanBlocks);
+    if (value !== null && typeof value === "object") {
+      const obj = value as Record<string, unknown>;
+      const cleaned: Record<string, unknown> = {};
+      for (const key of Object.keys(obj)) {
+        if (key === "block_id" || key === "verbatim") continue;
+        cleaned[key] = cleanBlocks(obj[key]);
+      }
+      return cleaned;
+    }
+    return value;
+  }
+
+  const decodedBlocks = cleanBlocks(
+    JSON.parse(JSON.stringify(existingBlocks).replace(/\+/g, " "))
+  ) as Array<Record<string, unknown>>;
 
   if (actionId === "take_ticket") {
     const userMap = env.SLACK_TO_CLICKUP_USER_MAP();
