@@ -14,7 +14,7 @@ import { slackPriorityToClickUp } from "../lib/priority.js";
 import { checkRateLimit, checkRateLimitByIp } from "../lib/security.js";
 import { validateWorkflowPayload, getWorkflowFields } from "../utils/validator.js";
 import { log } from "../utils/logger.js";
-import { saveThreadMapping } from "../lib/threadStore.js";
+import { getRedis, saveThreadMapping } from "../lib/threadStore.js";
 import { sendAlert } from "../lib/alerts.js";
 import { getRawBody } from "../utils/request.js";
 
@@ -54,6 +54,29 @@ export default async function handler(
     log("security_reject", { reason: "invalid_webhook_secret" });
     res.status(401).json({ error: "Unauthorized" });
     return;
+  }
+
+  const idempotencyKeyRaw = req.headers["x-idempotency-key"];
+  const idempotencyKey =
+    typeof idempotencyKeyRaw === "string"
+      ? idempotencyKeyRaw.trim()
+      : Array.isArray(idempotencyKeyRaw)
+        ? (idempotencyKeyRaw[0] as string)?.trim()
+        : "";
+  if (idempotencyKey) {
+    const redis = getRedis();
+    const redisKey = `idempotency:${idempotencyKey}`;
+    const wasSet = await redis.set(redisKey, "1", {
+      nx: true,
+      ex: 24 * 60 * 60,
+    });
+    if (wasSet !== "OK") {
+      res.status(200).json({
+        status: "duplicate",
+        message: "Already processed",
+      });
+      return;
+    }
   }
 
   let rawBody: string;
