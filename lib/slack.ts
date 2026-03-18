@@ -353,6 +353,54 @@ export async function getSlackUserInfo(userId: string): Promise<{
 }
 
 /**
+ * Resolve a display name (e.g. "Antonio Juarez" or "@Antonio Juarez") to a Slack user ID via users.list.
+ * Returns null if no match, multiple matches (logs warning, returns first), or on error.
+ */
+export async function resolveSlackUserId(displayName: string): Promise<string | null> {
+  try {
+    const search = displayName.replace(/^\@/, "").trim();
+    if (!search) return null;
+
+    const members: Array<{ id: string; name?: string; profile?: { display_name?: string; real_name?: string } }> = [];
+    let cursor: string | undefined;
+    do {
+      const params = new URLSearchParams({ limit: "200" });
+      if (cursor) params.set("cursor", cursor);
+      const res = await fetch(`${SLACK_API_BASE}/users.list?${params}`, {
+        headers: { Authorization: `Bearer ${getBotToken()}` },
+      });
+      const data = (await res.json()) as {
+        ok: boolean;
+        members?: Array<{ id: string; name?: string; profile?: { display_name?: string; real_name?: string } }>;
+        response_metadata?: { next_cursor?: string };
+      };
+      if (!data.ok || !Array.isArray(data.members)) return null;
+      members.push(...data.members);
+      cursor = data.response_metadata?.next_cursor;
+    } while (cursor);
+
+    const lower = search.toLowerCase();
+    const matches = members.filter((m) => {
+      const dn = (m.profile?.display_name ?? "").toLowerCase().trim();
+      const rn = (m.profile?.real_name ?? "").toLowerCase().trim();
+      const n = (m.name ?? "").toLowerCase().trim();
+      return dn === lower || rn === lower || n === lower;
+    });
+
+    if (matches.length === 0) return null;
+    if (matches.length > 1) {
+      await sendAlert("warning", "requester_lookup_multiple_matches", {
+        displayName: search,
+        matchCount: matches.length,
+      });
+    }
+    return matches[0].id;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Post an ephemeral message (visible only to the given user).
  */
 export async function postEphemeral(

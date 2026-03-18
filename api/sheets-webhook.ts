@@ -9,12 +9,13 @@ import {
   buildTicketMessageBlocks,
   maybeAddHighPriorityMention,
   postMessage,
+  resolveSlackUserId,
 } from "../lib/slack.js";
 import { slackPriorityToClickUp } from "../lib/priority.js";
 import { checkRateLimit, checkRateLimitByIp } from "../lib/security.js";
 import { validateWorkflowPayload, getWorkflowFields } from "../utils/validator.js";
 import { log } from "../utils/logger.js";
-import { getRedis, saveThreadMapping } from "../lib/threadStore.js";
+import { getRedis, saveReporter, saveThreadMapping } from "../lib/threadStore.js";
 import { sendAlert } from "../lib/alerts.js";
 import { getRawBody } from "../utils/request.js";
 
@@ -120,9 +121,12 @@ export default async function handler(
   const { requester, description, priority, type_of_request, troubleshooting_steps } =
     getWorkflowFields(payload);
 
-  const taskName = `${type_of_request || "Request"} | ${priority} | ${requester}`;
+  const resolvedRequesterId = await resolveSlackUserId(requester);
+  const requesterDisplay = resolvedRequesterId ? `<@${resolvedRequesterId}>` : requester;
+
+  const taskName = `${type_of_request || "Request"} | ${priority} | ${requesterDisplay}`;
   const taskDescription = [
-    `Requester: ${requester}`,
+    `Requester: ${requesterDisplay}`,
     `Priority: ${priority}`,
     `Type: ${type_of_request}`,
     ``,
@@ -138,12 +142,15 @@ export default async function handler(
     });
 
     const taskId = created.id;
+    if (resolvedRequesterId) {
+      await saveReporter(taskId, resolvedRequesterId);
+    }
     const taskRes = await getTask(taskId);
     const customId = taskRes.custom_id ?? `ITOPS-${taskId.slice(-6)}`;
     const ticketUrl = getTaskUrl(taskId);
 
     let blocks = buildTicketMessageBlocks({
-      requester,
+      requester: requesterDisplay,
       priority,
       typeOfRequest: type_of_request,
       description,

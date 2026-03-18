@@ -354,6 +354,27 @@ export default async function handler(
     }
   } else if (actionId === "reopen_ticket") {
     try {
+      const assigneeId = await getAssignee(taskId);
+      const reporterId = await getReporter(taskId);
+      if (!assigneeId || !reporterId) {
+        await postEphemeral(
+          channelId,
+          slackUserId,
+          "You are not authorized to reopen this ticket."
+        );
+        res.status(200).end();
+        return;
+      }
+      if (slackUserId !== assigneeId && slackUserId !== reporterId) {
+        await postEphemeral(
+          channelId,
+          slackUserId,
+          "You are not authorized to reopen this ticket. Only the assignee or the requester can reopen it."
+        );
+        res.status(200).end();
+        return;
+      }
+
       const mainMessageTs = (payload.message as { thread_ts?: string })?.thread_ts;
       if (!mainMessageTs) {
         log("api_error", { reason: "reopen_missing_thread_ts", taskId });
@@ -399,8 +420,6 @@ export default async function handler(
       await reopenTask(taskId, reopenStatus);
       await saveReopenTimestamp(taskId, messageTs);
 
-      const reporterId = await getReporter(taskId);
-      const assigneeId = await getAssignee(taskId);
       let reporterDisplay = reporterId ? `<@${reporterId}>` : "user";
       if (reporterId) {
         const info = await getSlackUserInfo(reporterId);
