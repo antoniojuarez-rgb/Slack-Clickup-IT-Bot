@@ -231,10 +231,6 @@ export default async function handler(
   if (actionId === "take_ticket") {
     const userMap = env.SLACK_TO_CLICKUP_USER_MAP();
     if (userMap[slackUserId] === undefined) {
-      await sendAlert("warning", "unmapped_user_take_ticket", {
-        slackUserId,
-        timestamp: new Date().toISOString().replace("T", " ").slice(0, 19) + " UTC",
-      });
       await postEphemeral(channelId, slackUserId, "You are not authorized to take tickets. Please contact your IT administrator.");
       res.status(200).end();
       return;
@@ -247,11 +243,7 @@ export default async function handler(
       } catch (err) {
         const message = err instanceof Error ? err.message : "Unknown error";
         log("api_error", { reason: "clickup_assign_failed", details: message });
-        await sendAlert("error", "take_ticket_assign_failed", {
-          taskId,
-          slackUserId,
-          Error: message,
-        });
+        await sendAlert("error", "take_ticket_assign_failed", { taskId, error: message });
       }
     }
     await saveAssignee(taskId, slackUserId);
@@ -308,6 +300,7 @@ export default async function handler(
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
       log("api_error", { reason: "thread_to_clickup_failed", details: message });
+      await sendAlert("error", "thread_to_clickup_failed", { taskId, error: message });
     }
 
     try {
@@ -315,7 +308,7 @@ export default async function handler(
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
       log("api_error", { reason: "clickup_close_failed", details: message });
-      await sendAlert("error", "close_ticket_failed", { taskId, Error: message });
+      await sendAlert("error", "close_ticket_failed", { taskId, error: message });
     }
     await saveClosedTs(taskId, String(Date.now() / 1000));
 
@@ -484,7 +477,6 @@ export default async function handler(
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
       log("api_error", { reason: "clickup_reopen_failed", details: message });
-      await sendAlert("error", "reopen_failed", { taskId, Error: message });
     }
   }
 
