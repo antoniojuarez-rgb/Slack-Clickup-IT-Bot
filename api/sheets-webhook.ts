@@ -24,7 +24,6 @@ export default async function handler(
   req: VercelRequest,
   res: VercelResponse
 ): Promise<void> {
-  log("debug", { event: "sheets_webhook_start" });
   if (req.method !== "POST") {
     res.status(405).json({ error: "Method not allowed" });
     return;
@@ -131,8 +130,6 @@ export default async function handler(
     troubleshooting_steps ? `\nTroubleshooting:\n${troubleshooting_steps}` : "",
   ].join("\n");
 
-  log("debug", { event: "create_ticket_payload", name: taskName, description: taskDescription });
-
   try {
     const created = await createTask(listId, {
       name: taskName,
@@ -162,7 +159,6 @@ export default async function handler(
       await saveThreadMapping(msgResult.ts, taskId);
       const threadTsSlug = msgResult.ts.replace(".", "");
       const slackThreadUrl = `https://felix-pago.slack.com/archives/${channelId}/p${threadTsSlug}`;
-      log("debug", { event: "slack_thread_url", url: slackThreadUrl, taskId });
       try {
         await setCustomField(
           taskId,
@@ -179,7 +175,7 @@ export default async function handler(
       taskId,
       customId,
       priority,
-      type: type_of_request,
+      type: type_of_request.length > 50 ? type_of_request.slice(0, 50) + "..." : type_of_request,
       source: "sheets-webhook",
     });
 

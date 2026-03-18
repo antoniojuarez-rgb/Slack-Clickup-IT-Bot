@@ -191,13 +191,6 @@ export default async function handler(
     for (let i = 0; i < blocks.length; i++) {
       const b = blocks[i] as Record<string, unknown>;
       const textObj = b.text as { text?: string } | undefined;
-      log("debug", {
-        event: "extract_block",
-        index: i,
-        text: textObj?.text,
-        fields: b.fields,
-      });
-
       if (b.type === "section" && Array.isArray(b.fields)) {
         for (const field of b.fields as Array<Record<string, string>>) {
           const raw = field.text ?? "";
@@ -227,7 +220,6 @@ export default async function handler(
     }
 
     const extracted = { requester, priority, typeOfRequest, description, troubleshootingSteps, ticketId, ticketUrl };
-    log("debug", { event: "extract_result", data: extracted });
     return extracted;
   }
 
@@ -279,7 +271,7 @@ export default async function handler(
       claimedBy: displayName,
     });
 
-      log("slack_update_blocks", { action: "take_ticket", blocks: JSON.stringify(blocks) });
+      log("slack_update_blocks", { action: "take_ticket", taskId });
     try {
       await updateMessage(channelId, messageTs, cleanBlocks(blocks) as any[]);
     } catch (err) {
@@ -343,7 +335,7 @@ export default async function handler(
       closedBy: displayName,
     });
 
-    log("slack_update_blocks", { action: "close_ticket", blocks: JSON.stringify(blocks) });
+    log("slack_update_blocks", { action: "close_ticket", taskId });
     try {
       await updateMessage(channelId, messageTs, cleanBlocks(blocks) as any[]);
     } catch (err) {

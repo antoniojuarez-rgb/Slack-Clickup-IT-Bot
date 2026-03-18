@@ -308,10 +308,14 @@ export async function updateMessage(
     [key: string]: unknown;
   };
   if (!data.ok) {
+    const metaStr =
+      typeof data.response_metadata === "string"
+        ? data.response_metadata
+        : JSON.stringify(data.response_metadata ?? "");
     log("api_error", {
       reason: "slack_update_failed",
       details: data.error,
-      response_metadata: data.response_metadata,
+      response_metadata: metaStr.length > 200 ? metaStr.slice(0, 200) + "..." : metaStr,
     });
     throw new Error(data.error ?? "Slack API error");
   }
