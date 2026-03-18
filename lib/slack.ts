@@ -130,6 +130,16 @@ export function buildTicketMessageBlocks(params: {
     });
   }
 
+  blocks.push({
+    type: "context",
+    elements: [
+      {
+        type: "mrkdwn",
+        text: "📎 Have files or screenshots? Add them as a reply in this thread and they will be included when the ticket is closed.",
+      },
+    ],
+  });
+
   const actions: SlackMessageBlock["elements"] = [
     {
       type: "button",
