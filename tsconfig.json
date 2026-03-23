@@ -18,6 +18,6 @@
       "@/*": ["./*"]
     }
   },
-  "include": ["api/**/*", "lib/**/*", "types/**/*", "config/**/*", "utils/**/*", "tests/**/*"],
+  "include": ["index.ts", "api/**/*", "lib/**/*", "types/**/*", "config/**/*", "utils/**/*", "tests/**/*"],
   "exclude": ["node_modules", "dist"]
 }
