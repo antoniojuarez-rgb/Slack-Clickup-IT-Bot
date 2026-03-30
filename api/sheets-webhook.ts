@@ -3,6 +3,7 @@
  * Authenticates via x-webhook-secret header instead of Slack signature verification.
  */
 
+import crypto from "node:crypto";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createTask, getTask, getTaskUrl, setCustomField } from "../lib/clickup.js";
 import {
@@ -17,9 +18,17 @@ import { validateWorkflowPayload, getWorkflowFields } from "../utils/validator.j
 import { log } from "../utils/logger.js";
 import { getRedis, saveReporter, saveThreadMapping } from "../lib/threadStore.js";
 import { sendAlert } from "../lib/alerts.js";
-import { getRawBody } from "../utils/request.js";
+import { getRawBody, PayloadTooLargeError } from "../utils/request.js";
 
 export const config = { api: { bodyParser: false } };
+
+const SHEETS_WEBHOOK_MAX_BODY_BYTES = 512 * 1024;
+
+function webhookSecretsEqual(provided: string, expected: string): boolean {
+  const hp = crypto.createHash("sha256").update(Buffer.from(provided, "utf8")).digest();
+  const he = crypto.createHash("sha256").update(Buffer.from(expected, "utf8")).digest();
+  return crypto.timingSafeEqual(hp, he);
+}
 
 export default async function handler(
   req: VercelRequest,
@@ -49,8 +58,14 @@ export default async function handler(
     return;
   }
 
-  const providedSecret = req.headers["x-webhook-secret"];
-  if (!providedSecret || providedSecret !== webhookSecret) {
+  const headerRaw = req.headers["x-webhook-secret"];
+  const providedSecret =
+    typeof headerRaw === "string"
+      ? headerRaw
+      : Array.isArray(headerRaw)
+        ? headerRaw[0]
+        : undefined;
+  if (!providedSecret || !webhookSecretsEqual(providedSecret, webhookSecret)) {
     log("security_reject", { reason: "invalid_webhook_secret" });
     res.status(401).json({ error: "Unauthorized" });
     return;
@@ -81,8 +96,12 @@ export default async function handler(
 
   let rawBody: string;
   try {
-    rawBody = await getRawBody(req);
-  } catch {
+    rawBody = await getRawBody(req, SHEETS_WEBHOOK_MAX_BODY_BYTES);
+  } catch (err) {
+    if (err instanceof PayloadTooLargeError) {
+      res.status(413).json({ error: "Payload too large" });
+      return;
+    }
     rawBody = "";
   }
 
