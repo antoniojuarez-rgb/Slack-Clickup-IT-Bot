@@ -32,9 +32,13 @@ export async function saveThreadMapping(
   threadTs: string,
   taskId: string
 ): Promise<void> {
-  const redis = getRedis();
-  const key = `${PREFIX_THREAD}${threadTs}`;
-  await redis.set(key, taskId, { ex: TTL_SECONDS });
+  try {
+    const redis = getRedis();
+    const key = `${PREFIX_THREAD}${threadTs}`;
+    await redis.set(key, taskId, { ex: TTL_SECONDS });
+  } catch {
+    console.warn("Redis unavailable: saveThreadMapping");
+  }
 }
 
 /**
@@ -43,10 +47,15 @@ export async function saveThreadMapping(
 export async function getTaskIdFromThread(
   threadTs: string
 ): Promise<string | null> {
-  const redis = getRedis();
-  const key = `${PREFIX_THREAD}${threadTs}`;
-  const value = await redis.get<string>(key);
-  return value ?? null;
+  try {
+    const redis = getRedis();
+    const key = `${PREFIX_THREAD}${threadTs}`;
+    const value = await redis.get<string>(key);
+    return value ?? null;
+  } catch {
+    console.warn("Redis unavailable: getTaskIdFromThread");
+    return null;
+  }
 }
 
 /**
@@ -57,9 +66,13 @@ export async function saveReopenTimestamp(
   taskId: string,
   ts: string
 ): Promise<void> {
-  const redis = getRedis();
-  const key = `${PREFIX_REOPEN}${taskId}`;
-  await redis.set(key, ts, { ex: TTL_SECONDS });
+  try {
+    const redis = getRedis();
+    const key = `${PREFIX_REOPEN}${taskId}`;
+    await redis.set(key, ts, { ex: TTL_SECONDS });
+  } catch {
+    console.warn("Redis unavailable: saveReopenTimestamp");
+  }
 }
 
 /**
@@ -68,19 +81,28 @@ export async function saveReopenTimestamp(
 export async function getReopenTimestamp(
   taskId: string
 ): Promise<string | null> {
-  const redis = getRedis();
-  const key = `${PREFIX_REOPEN}${taskId}`;
-  const value = await redis.get<string>(key);
-  return value ?? null;
+  try {
+    const redis = getRedis();
+    const key = `${PREFIX_REOPEN}${taskId}`;
+    const value = await redis.get<string>(key);
+    return value ?? null;
+  } catch {
+    console.warn("Redis unavailable: getReopenTimestamp");
+    return null;
+  }
 }
 
 /**
  * Clear reopen timestamp (after copying thread on close).
  */
 export async function clearReopenTimestamp(taskId: string): Promise<void> {
-  const redis = getRedis();
-  const key = `${PREFIX_REOPEN}${taskId}`;
-  await redis.del(key);
+  try {
+    const redis = getRedis();
+    const key = `${PREFIX_REOPEN}${taskId}`;
+    await redis.del(key);
+  } catch {
+    console.warn("Redis unavailable: clearReopenTimestamp");
+  }
 }
 
 /**
@@ -90,19 +112,28 @@ export async function saveReporter(
   taskId: string,
   slackUserId: string
 ): Promise<void> {
-  const redis = getRedis();
-  await redis.set(`${PREFIX_REPORTER}${taskId}`, slackUserId, {
-    ex: TTL_SECONDS,
-  });
+  try {
+    const redis = getRedis();
+    await redis.set(`${PREFIX_REPORTER}${taskId}`, slackUserId, {
+      ex: TTL_SECONDS,
+    });
+  } catch {
+    console.warn("Redis unavailable: saveReporter");
+  }
 }
 
 /**
  * Get reporter Slack user ID.
  */
 export async function getReporter(taskId: string): Promise<string | null> {
-  const redis = getRedis();
-  const value = await redis.get<string>(`${PREFIX_REPORTER}${taskId}`);
-  return value ?? null;
+  try {
+    const redis = getRedis();
+    const value = await redis.get<string>(`${PREFIX_REPORTER}${taskId}`);
+    return value ?? null;
+  } catch {
+    console.warn("Redis unavailable: getReporter");
+    return null;
+  }
 }
 
 /**
@@ -112,19 +143,28 @@ export async function saveAssignee(
   taskId: string,
   slackUserId: string
 ): Promise<void> {
-  const redis = getRedis();
-  await redis.set(`${PREFIX_ASSIGNEE}${taskId}`, slackUserId, {
-    ex: TTL_SECONDS,
-  });
+  try {
+    const redis = getRedis();
+    await redis.set(`${PREFIX_ASSIGNEE}${taskId}`, slackUserId, {
+      ex: TTL_SECONDS,
+    });
+  } catch {
+    console.warn("Redis unavailable: saveAssignee");
+  }
 }
 
 /**
  * Get assignee Slack user ID.
  */
 export async function getAssignee(taskId: string): Promise<string | null> {
-  const redis = getRedis();
-  const value = await redis.get<string>(`${PREFIX_ASSIGNEE}${taskId}`);
-  return value ?? null;
+  try {
+    const redis = getRedis();
+    const value = await redis.get<string>(`${PREFIX_ASSIGNEE}${taskId}`);
+    return value ?? null;
+  } catch {
+    console.warn("Redis unavailable: getAssignee");
+    return null;
+  }
 }
 
 /**
@@ -134,41 +174,62 @@ export async function saveClosedTs(
   taskId: string,
   ts: string
 ): Promise<void> {
-  const redis = getRedis();
-  await redis.set(`${PREFIX_CLOSED_TS}${taskId}`, ts, {
-    ex: TTL_SECONDS,
-  });
+  try {
+    const redis = getRedis();
+    await redis.set(`${PREFIX_CLOSED_TS}${taskId}`, ts, {
+      ex: TTL_SECONDS,
+    });
+  } catch {
+    console.warn("Redis unavailable: saveClosedTs");
+  }
 }
 
 /**
  * Get closed timestamp (for 24h reopen guard).
  */
 export async function getClosedTs(taskId: string): Promise<string | null> {
-  const redis = getRedis();
-  const value = await redis.get<string>(`${PREFIX_CLOSED_TS}${taskId}`);
-  return value ?? null;
+  try {
+    const redis = getRedis();
+    const value = await redis.get<string>(`${PREFIX_CLOSED_TS}${taskId}`);
+    return value ?? null;
+  } catch {
+    console.warn("Redis unavailable: getClosedTs");
+    return null;
+  }
 }
 
 /**
  * Get reopen count for this task.
+ * Returns null if Redis is unavailable (local dev).
  */
-export async function getReopenCount(taskId: string): Promise<number> {
-  const redis = getRedis();
-  const key = `${PREFIX_REOPEN_COUNT}${taskId}`;
-  const value = await redis.get<string>(key);
-  if (value == null) return 0;
-  const n = parseInt(value, 10);
-  return Number.isNaN(n) ? 0 : n;
+export async function getReopenCount(
+  taskId: string
+): Promise<number | null> {
+  try {
+    const redis = getRedis();
+    const key = `${PREFIX_REOPEN_COUNT}${taskId}`;
+    const value = await redis.get<string>(key);
+    if (value == null) return 0;
+    const n = parseInt(value, 10);
+    return Number.isNaN(n) ? 0 : n;
+  } catch {
+    console.warn("Redis unavailable: getReopenCount");
+    return null;
+  }
 }
 
 /**
  * Increment reopen count (TTL 30 days on key).
  */
 export async function incrementReopenCount(taskId: string): Promise<void> {
-  const redis = getRedis();
-  const key = `${PREFIX_REOPEN_COUNT}${taskId}`;
-  const newCount = await redis.incr(key);
-  if (newCount === 1) {
-    await redis.expire(key, TTL_SECONDS);
+  try {
+    const redis = getRedis();
+    const key = `${PREFIX_REOPEN_COUNT}${taskId}`;
+    const newCount = await redis.incr(key);
+    if (newCount === 1) {
+      await redis.expire(key, TTL_SECONDS);
+    }
+  } catch {
+    console.warn("Redis unavailable: incrementReopenCount");
   }
 }

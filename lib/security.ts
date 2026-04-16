@@ -20,6 +20,12 @@ function getSlackSigningSecret(): string {
   return process.env.SLACK_SIGNING_SECRET ?? "";
 }
 
+/** Local dev only: ignored when NODE_ENV is production. */
+function skipSlackSignatureVerify(): boolean {
+  if (process.env.NODE_ENV === "production") return false;
+  return process.env.SKIP_SLACK_VERIFY === "true";
+}
+
 /**
  * Verify Slack request using X-Slack-Signature and X-Slack-Request-Timestamp.
  * Use raw body (string) as received.
@@ -29,6 +35,10 @@ export function verifySlackSignature(
   signature: string | undefined,
   timestamp: string | undefined
 ): boolean {
+  if (skipSlackSignatureVerify()) {
+    return true;
+  }
+
   const secret = getSlackSigningSecret();
   if (!secret || !signature?.startsWith(SLACK_SIGNATURE_PREFIX) || !timestamp) {
     return false;
@@ -71,17 +81,22 @@ export function checkRateLimit(identifier: string): boolean {
  * Returns true if allowed, false if rate limited.
  */
 export async function checkRateLimitByIp(ip: string): Promise<boolean> {
-  const redis = getRedis();
-  const key = `${RATE_LIMIT_IP_PREFIX}${ip}`;
-  const count = await redis.incr(key);
-  if (count === 1) {
-    await redis.expire(key, RATE_LIMIT_IP_TTL_SECONDS);
+  try {
+    const redis = getRedis();
+    const key = `${RATE_LIMIT_IP_PREFIX}${ip}`;
+    const count = await redis.incr(key);
+    if (count === 1) {
+      await redis.expire(key, RATE_LIMIT_IP_TTL_SECONDS);
+    }
+    if (count > RATE_LIMIT_IP_PER_MINUTE) {
+      await redis.decr(key);
+      return false;
+    }
+    return true;
+  } catch {
+    console.warn("Redis unavailable for IP rate limit, allowing request");
+    return true;
   }
-  if (count > RATE_LIMIT_IP_PER_MINUTE) {
-    await redis.decr(key);
-    return false;
-  }
-  return true;
 }
 
 export function getSlackUserIdFromPayload(payload: unknown): string | null {

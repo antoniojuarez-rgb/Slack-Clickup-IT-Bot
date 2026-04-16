@@ -1,3 +1,5 @@
+import "dotenv/config";
+
 /**
  * HTTP server for Google Cloud Run (and other Node hosts).
  * Vercel serverless handlers are mounted as Express routes; no global body parser so raw bodies work for Slack/webhooks.

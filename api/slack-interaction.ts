@@ -397,7 +397,7 @@ export default async function handler(
         }
       }
 
-      const reopenCount = await getReopenCount(taskId);
+      const reopenCount = (await getReopenCount(taskId)) ?? 0;
       if (reopenCount >= 2) {
         await postEphemeral(
           channelId,

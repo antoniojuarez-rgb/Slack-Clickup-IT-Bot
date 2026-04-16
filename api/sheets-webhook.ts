@@ -192,8 +192,12 @@ export default async function handler(
           slackThreadUrl
         );
       } catch (err) {
-        const msg = err instanceof Error ? err.message : "Unknown error";
-        log("api_error", { reason: "clickup_slack_thread_field_failed", details: msg });
+        const error = err instanceof Error ? err : new Error(String(err));
+        log("api_error", {
+          reason: error.message,
+          stack: error.stack,
+          cause: error.cause,
+        });
       }
     }
 
@@ -207,13 +211,17 @@ export default async function handler(
 
     res.status(200).json({ ok: true, task_id: taskId, custom_id: customId });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    log("api_error", { reason: message });
+    const error = err instanceof Error ? err : new Error(String(err));
+    log("api_error", {
+      reason: error.message,
+      stack: error.stack,
+      cause: error.cause,
+    });
     await sendAlert("error", "ticket_creation_failed", {
       Requester: requester,
       Type: type_of_request,
       Priority: priority,
-      Error: message,
+      Error: error.message,
     });
     res.status(500).json({ error: "Failed to create ticket" });
   }
